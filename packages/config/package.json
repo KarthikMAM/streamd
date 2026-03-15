@@ -1,0 +1,21 @@
+{
+  "name": "@streamd/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tsdown": "./tsdown.ts",
+    "./vitest": "./vitest.ts",
+    "./tsconfig/base": "./tsconfig/base.json",
+    "./tsconfig/library": "./tsconfig/library.json"
+  },
+  "files": [
+    "tsdown.ts",
+    "vitest.ts",
+    "tsconfig"
+  ],
+  "dependencies": {
+    "tsdown": "^0.21.0",
+    "vitest": "^3.2.0"
+  }
+}
