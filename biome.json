@@ -12,6 +12,14 @@
     "lineWidth": 100
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/.turbo", "!**/build", "!**/.docusaurus"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/.turbo",
+      "!**/build",
+      "!**/.docusaurus",
+      "!**/fixtures"
+    ]
   }
 }
