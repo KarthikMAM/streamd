@@ -13,7 +13,7 @@ export interface StreamdOptions {
  * Parse a markdown string into tokens.
  * This is a placeholder — real implementation coming soon.
  */
-export function parse(input: string, _options?: StreamdOptions): string[] {
+export function parse(input: string, _options?: StreamdOptions): Array<string> {
   if (!input) return [];
   return input.split("\n");
 }

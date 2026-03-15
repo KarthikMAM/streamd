@@ -16,11 +16,11 @@ import { SKIP } from "./skip";
 
 // ── Stubs — replace with @streamd/parser imports ──
 
-function parse(_markdown: string): unknown[] {
+function parse(_markdown: string): Array<unknown> {
   return [];
 }
 
-function render(_tokens: unknown[]): string {
+function render(_tokens: Array<unknown>): string {
   return "NOT_YET_IMPLEMENTED";
 }
 
@@ -43,7 +43,7 @@ async function normalizeHtml(html: string): Promise<string> {
 
 // ── Discover .md/.html fixture pairs in a directory ──
 
-function discoverFixtures(directory: string): string[] {
+function discoverFixtures(directory: string): Array<string> {
   return readdirSync(directory)
     .filter((file) => file.endsWith(".md"))
     .sort()
@@ -78,6 +78,7 @@ for (const { name: suiteName, directory, skipKey } of suites) {
         const normalizedExpected = await normalizeHtml(expectedHtml);
 
         // TODO: flip to .toBe() once parser + renderer are implemented
+        // biome-ignore lint/suspicious/noMisplacedAssertion: testFn is it() or it.skip()
         expect(normalizedActual).not.toBe(normalizedExpected);
       });
     }
