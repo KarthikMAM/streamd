@@ -1,0 +1,9 @@
+# <type>(<scope>): <subject>
+#
+# types: feat, fix, docs, style, refactor, perf, test, chore, ci
+# scope: parser, docs, tsconfig, ci, etc.
+# subject: lowercase, imperative, no period at end
+#
+# body: explain what and why (not how), wrap at 72 chars
+#
+# footer: breaking changes, issue references

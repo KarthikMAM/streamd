@@ -1,0 +1,7 @@
+node_modules
+dist
+.turbo
+*.tsbuildinfo
+build.log
+.docusaurus
+apps/docs/build

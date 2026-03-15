@@ -1,0 +1,8 @@
+{
+  "extends": "./packages/config/tsconfig/base.json",
+  "compilerOptions": {
+    "paths": {
+      "@streamd/parser": ["./packages/parser/src/index.ts"]
+    }
+  }
+}
