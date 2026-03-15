@@ -1,0 +1,5 @@
+{
+  "extends": "@streamd/config/tsconfig/library",
+  "compilerOptions": { "noEmit": true, "rootDir": "./src" },
+  "include": ["src"]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@streamd/spec",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Spec compliance tests for @streamd/parser",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "sync": "node scripts/sync.mjs"
+  },
+  "devDependencies": {
+    "@streamd/config": "*",
+    "html-minifier-terser": "^7.2.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "license": "MIT"
+}
