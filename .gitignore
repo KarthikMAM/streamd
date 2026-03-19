@@ -5,3 +5,5 @@ dist
 build.log
 .docusaurus
 apps/docs/build
+coverage/
+vendor/

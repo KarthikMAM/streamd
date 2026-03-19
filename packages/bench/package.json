@@ -1,0 +1,21 @@
+{
+  "name": "@streamd/bench",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Performance benchmarks for @streamd/parser",
+  "type": "module",
+  "scripts": {
+    "bench": "tsx src/index.ts",
+    "build": "tsdown",
+    "bench:browser": "tsdown && node serve.js",
+    "serve": "node serve.js"
+  },
+  "devDependencies": {
+    "@streamd/config": "*",
+    "@streamd/parser": "*",
+    "commonmark": "^0.31.2",
+    "markdown-it": "^14.1.1",
+    "marked": "^17.0.4",
+    "tsx": "^4.19.0"
+  }
+}

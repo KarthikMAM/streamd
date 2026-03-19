@@ -114,11 +114,53 @@
       }
     },
     {
+      "includes": ["packages/parser/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useForOf": "off",
+            "noNonNullAssertion": "off",
+            "noParameterAssign": "off",
+            "useDefaultSwitchClause": "off",
+            "useNamingConvention": "off",
+            "useTemplate": "off"
+          },
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off"
+          },
+          "performance": {
+            "noBarrelFile": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["**/scripts/**"],
       "linter": {
         "rules": {
           "suspicious": {
             "noConsole": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/bench/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off",
+            "useTemplate": "off"
+          },
+          "correctness": {
+            "noUndeclaredVariables": "off",
+            "noUndeclaredDependencies": "off"
+          },
+          "performance": {
+            "noBarrelFile": "off"
           }
         }
       }
@@ -132,7 +174,9 @@
       "!**/.turbo",
       "!**/build",
       "!**/.docusaurus",
-      "!**/fixtures"
+      "!**/fixtures",
+      "!**/coverage",
+      "!.vscode"
     ]
   }
 }

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>@streamd/parser Benchmark</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --text-muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --yellow: #d29922; --red: #f85149;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 2rem; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+  .subtitle { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem; }
+  .controls { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  select, button { font-size: 0.875rem; padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+  button { background: var(--accent); color: #000; font-weight: 600; border: none; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button:hover:not(:disabled) { filter: brightness(1.1); }
+  .status { color: var(--text-muted); font-size: 0.8rem; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; position: relative; transition: border-color 0.2s; }
+  .card.best { border-color: var(--green); }
+  .card-name { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
+  .card-hero { font-size: 2rem; font-weight: 700; color: var(--accent); }
+  .card-hero-unit { font-size: 0.75rem; color: var(--text-muted); margin-left: 0.25rem; }
+  .card.best .card-hero { color: var(--green); }
+  .badge { position: absolute; top: 0.5rem; right: 0.5rem; font-size: 0.65rem; padding: 0.15rem 0.4rem; border-radius: 4px; background: var(--green); color: #000; font-weight: 600; }
+  .stats { margin-top: 0.75rem; display: grid; grid-template-columns: 1fr; gap: 0.25rem; }
+  .stat { display: flex; justify-content: space-between; font-size: 0.8rem; }
+  .stat-label { color: var(--text-muted); }
+  .stat-value { font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { padding: 0.5rem 0.75rem; text-align: right; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-muted); font-weight: 500; }
+  th:first-child, td:first-child { text-align: left; }
+  tr:hover td { background: rgba(88,166,255,0.05); }
+  .section-title { font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem; }
+  .progress { height: 4px; background: var(--border); border-radius: 2px; margin-bottom: 1rem; overflow: hidden; }
+  .progress-bar { height: 100%; background: var(--accent); transition: width 0.3s; }
+</style>
+</head>
+<body>
+
+<h1>@streamd/parser Benchmark</h1>
+<p class="subtitle">Compare parsing throughput across markdown parsers — runs entirely in your browser.</p>
+<p class="subtitle" id="precisionNote" style="color: var(--yellow)"></p>
+
+<div class="controls">
+  <select id="inputSelect">
+    <option value="synthetic-1">Synthetic 1 KB</option>
+    <option value="synthetic-50" selected>Synthetic 50 KB</option>
+    <option value="synthetic-500">Synthetic 500 KB</option>
+    <option value="realworld">Real-world sample</option>
+    <option value="pathological-star">Pathological *×10000</option>
+    <option value="pathological-bq">Pathological >×200</option>
+  </select>
+  <button id="runBtn" type="button">Run Benchmark</button>
+  <span id="status" class="status">Ready</span>
+</div>
+
+<div class="progress" id="progressWrap" style="display:none">
+  <div class="progress-bar" id="progressBar" style="width:0%"></div>
+</div>
+
+<div class="cards" id="cards"></div>
+
+<h3 class="section-title" id="tableTitle" style="display:none">Detailed Results</h3>
+<table id="resultsTable" style="display:none">
+  <thead><tr><th>Parser</th><th>Median</th><th>p95</th><th>Ops/s</th><th>Throughput</th></tr></thead>
+  <tbody id="resultsBody"></tbody>
+</table>
+
+<script type="module">
+import { CommonmarkParser, MarkdownIt, marked, streamdParse } from './dist/browser-parsers.js';
+
+const mdIt = new MarkdownIt();
+const cmParser = new CommonmarkParser();
+
+// --- Timer precision detection ---
+const isHighRes = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
+const precisionNote = document.getElementById('precisionNote');
+if (isHighRes) {
+  precisionNote.textContent = '\u2713 High precision timers (cross-origin isolated).';
+  precisionNote.style.color = 'var(--green)';
+} else {
+  precisionNote.textContent = '\u26A0 Low precision timers (100\u00B5s). Run: cd packages/bench && bun run bench:browser';
+}
+
+// --- Yield to event loop so UI updates between parsers ---
+function nextFrame() {
+  return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+}
+
+// --- Input generators ---
+function generateMixed(sizeKb) {
+  const parts = [];
+  let sz = 0;
+  while (sz < sizeKb * 1024) {
+    parts.push("# Heading Level 1\n\n");
+    parts.push("This is a paragraph with **bold**, *italic*, and `code` inline.\n");
+    parts.push("Another line with [a link](https://example.com) and an ![image](img.png).\n\n");
+    parts.push("> Blockquote with *emphasis* inside.\n\n");
+    parts.push("- Item one\n- Item two\n- Item three\n\n");
+    parts.push("1. First\n2. Second\n3. Third\n\n");
+    parts.push("```js\nconst x = 1;\nconsole.log(x);\n```\n\n");
+    parts.push("---\n\n");
+    parts.push("Plain text paragraph without any special characters at all. ".repeat(3) + "\n\n");
+    sz = parts.join("").length;
+  }
+  return parts.join("").slice(0, sizeKb * 1024);
+}
+
+const SAMPLE_MD = `# Building Modern React Applications
+
+**Published:** December 9, 2025 | **Reading Time:** 8 minutes
+
+---
+
+## Introduction
+
+React has evolved significantly, and 2025 brings exciting new patterns and best practices for building scalable applications. In this guide, we'll explore the latest trends that **every React developer** should know.
+
+For more information, visit the official [React documentation](https://react.dev).
+
+### Key Topics
+
+1. **Server Components** - The future of React
+2. **Performance Optimization** - Making your apps blazing fast
+3. **State Management** - Modern approaches
+
+---
+
+## Server Components: A Game Changer
+
+| Approach | Bundle Size | Load Time |
+|----------|------------|-----------|
+| Traditional SPA | **250 KB** | 2.5s |
+| SSR | **180 KB** | 1.8s |
+| RSC | **120 KB** | 1.2s |
+
+> "Server Components are a fundamental shift in how we architect React applications."
+>
+> \u2014 [Dan Abramov](https://twitter.com/dan_abramov)
+
+### Code Splitting
+
+\\\`\\\`\\\`typescript
+import { lazy, Suspense } from "react";
+const Dashboard = lazy(() => import("./Dashboard"));
+\\\`\\\`\\\`
+
+### Memoization
+
+- Use \\\`useMemo\\\` for expensive calculations
+- Use \\\`useCallback\\\` for function references
+- ~~Don't~~ use them for simple values
+
+## Features Checklist
+
+- [x] Server-side data fetching
+- [x] Optimistic UI updates
+- [ ] Advanced filtering
+- [ ] Export functionality
+
+---
+
+*Last updated: December 9, 2025*
+`;
+
+const INPUTS = {
+  'synthetic-1': () => generateMixed(1),
+  'synthetic-50': () => generateMixed(50),
+  'synthetic-500': () => generateMixed(500),
+  'realworld': () => SAMPLE_MD,
+  'pathological-star': () => '*'.repeat(10000),
+  'pathological-bq': () => '> '.repeat(200) + 'text',
+};
+
+// --- Parsers ---
+const PARSERS = [
+  { name: '@streamd/parser', fn: (s) => streamdParse(s) },
+  { name: 'marked', fn: (s) => marked.lexer(s) },
+  { name: 'markdown-it', fn: (s) => mdIt.parse(s, {}) },
+  { name: 'commonmark.js', fn: (s) => cmParser.parse(s) },
+];
+
+// --- Benchmark runner ---
+// Runs warmup, then measures in batches, yielding between batches
+// so the UI stays responsive even on large inputs.
+function runSync(fn, src, iterations) {
+  const times = new Float64Array(iterations);
+  for (let i = 0; i < iterations; i++) {
+    const t0 = performance.now();
+    fn(src);
+    times[i] = performance.now() - t0;
+  }
+  return times;
+}
+
+function computeStats(name, times, srcLen) {
+  const sorted = times.slice().sort();
+  const len = sorted.length;
+  const median = sorted[Math.floor(len / 2)] || 0.001;
+  const p95 = sorted[Math.floor(len * 0.95)] || 0.001;
+  const min = sorted[0] || 0.001;
+  const max = sorted[len - 1] || 0.001;
+  const avg = sorted.reduce((a, b) => a + b, 0) / len;
+  const opsPerSec = median > 0.0001 ? 1000 / median : 999999;
+  const throughput = median > 0.0001 ? (srcLen / 1048576) / (median / 1000) : 999999;
+  return { name, median, p95, min, max, avg, opsPerSec, throughput };
+}
+
+function chooseIterations(srcLen) {
+  if (srcLen > 200000) return { warmup: 10, iterations: 50 };
+  if (srcLen > 20000) return { warmup: 50, iterations: 200 };
+  return { warmup: 100, iterations: 1000 };
+}
+
+// --- UI rendering ---
+function renderCards(results) {
+  const el = document.getElementById('cards');
+  const fastest = Math.max(...results.map(r => r.throughput));
+  const slowest = Math.min(...results.map(r => r.throughput));
+
+  el.innerHTML = results.map(r => {
+    const isBest = r.throughput === fastest;
+    const ratio = slowest > 0.001 ? (r.throughput / slowest).toFixed(1) : '\u2014';
+    return `<div class="card ${isBest ? 'best' : ''}">
+      ${isBest ? '<span class="badge">FASTEST</span>' : ''}
+      <div class="card-name">${r.name}</div>
+      <div class="card-hero">${ratio}<span class="card-hero-unit">\u00D7 faster</span></div>
+      <div class="stats">
+        <div class="stat"><span class="stat-label">Throughput</span><span class="stat-value">${r.throughput.toFixed(1)} MB/s</span></div>
+        <div class="stat"><span class="stat-label">Ops/s</span><span class="stat-value">${r.opsPerSec.toFixed(0)}</span></div>
+        <div class="stat"><span class="stat-label">Median</span><span class="stat-value">${fmtTime(r.median)}</span></div>
+        <div class="stat"><span class="stat-label">p95</span><span class="stat-value">${fmtTime(r.p95)}</span></div>
+        <div class="stat"><span class="stat-label">Min</span><span class="stat-value">${fmtTime(r.min)}</span></div>
+        <div class="stat"><span class="stat-label">Max</span><span class="stat-value">${fmtTime(r.max)}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderTable(results) {
+  const tbody = document.getElementById('resultsBody');
+  tbody.innerHTML = results.map(r => `<tr>
+    <td>${r.name}</td>
+    <td>${fmtTime(r.median)}</td>
+    <td>${fmtTime(r.p95)}</td>
+    <td>${r.opsPerSec.toFixed(0)}</td>
+    <td>${r.throughput.toFixed(1)} MB/s</td>
+  </tr>`).join('');
+  document.getElementById('resultsTable').style.display = '';
+  document.getElementById('tableTitle').style.display = '';
+}
+
+function fmtTime(ms) {
+  if (ms < 0.001) return `${(ms * 1000000).toFixed(0)} ns`;
+  if (ms < 1) return `${(ms * 1000).toFixed(0)} \u00B5s`;
+  return `${ms.toFixed(2)} ms`;
+}
+
+// --- Main benchmark loop ---
+let running = false;
+
+document.getElementById('runBtn').addEventListener('click', async () => {
+  if (running) return;
+  running = true;
+
+  const btn = document.getElementById('runBtn');
+  const status = document.getElementById('status');
+  const progressWrap = document.getElementById('progressWrap');
+  const progressBar = document.getElementById('progressBar');
+
+  btn.disabled = true;
+  progressWrap.style.display = '';
+  progressBar.style.width = '0%';
+
+  const inputKey = document.getElementById('inputSelect').value;
+  const src = INPUTS[inputKey]();
+  const sizeKb = (src.length / 1024).toFixed(1);
+  const { warmup, iterations } = chooseIterations(src.length);
+
+  status.textContent = `Input: ${sizeKb} KB \u2022 ${warmup} warmup + ${iterations} iterations`;
+  await nextFrame();
+
+  const results = [];
+
+  for (let i = 0; i < PARSERS.length; i++) {
+    const p = PARSERS[i];
+
+    // Update UI before each parser
+    status.textContent = `Warming up ${p.name}... (${i + 1}/${PARSERS.length})`;
+    progressBar.style.width = `${((i + 0.3) / PARSERS.length) * 100}%`;
+    await nextFrame();
+
+    // Warmup — separate from measurement, lets JIT stabilize
+    runSync(p.fn, src, warmup);
+
+    // Yield after warmup so UI can paint
+    status.textContent = `Measuring ${p.name}... (${i + 1}/${PARSERS.length})`;
+    progressBar.style.width = `${((i + 0.7) / PARSERS.length) * 100}%`;
+    await nextFrame();
+
+    // Measurement
+    const times = runSync(p.fn, src, iterations);
+    results.push(computeStats(p.name, times, src.length));
+
+    // Yield after measurement
+    progressBar.style.width = `${((i + 1) / PARSERS.length) * 100}%`;
+    await nextFrame();
+  }
+
+  renderCards(results);
+  renderTable(results);
+
+  status.textContent = `Done \u2014 ${iterations}\u00D7 iterations on ${sizeKb} KB input.`;
+  btn.disabled = false;
+  progressWrap.style.display = 'none';
+  running = false;
+});
+</script>
+
+</body>
+</html>
