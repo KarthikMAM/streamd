@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Validate Parser Design",
+  "description": "After the agent finishes processing a request, check if any parser source files were modified and if so, validate that .kiro/steering/parser-design.md is still accurate. Update file structure, implementation status, and known gaps if anything changed.",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "The agent just finished a request. If any files in packages/parser/src/ were created, modified, or deleted during this execution, check if .kiro/steering/parser-design.md needs updating. Specifically verify: (1) File structure section matches actual files and exports. (2) Implementation status accurately reflects what is complete vs not yet implemented. (3) Known gaps are current. Only update if something is actually out of date. If no parser files were touched, do nothing."
+  }
+}

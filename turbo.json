@@ -21,6 +21,15 @@
     },
     "clean": {
       "cache": false
+    },
+    "bench": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "bench:browser": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
     }
   }
 }
