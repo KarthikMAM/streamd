@@ -48,3 +48,68 @@ export function printTable(label: string, results: Array<BenchResult>): void {
     );
   }
 }
+
+/** Result of a streaming benchmark run. */
+export interface StreamBenchResult {
+  name: string;
+  chunkSize: number;
+  totalMs: number;
+  perChunkMedianMs: number;
+  throughput: number;
+  numChunks: number;
+}
+
+/**
+ * Benchmark streaming parse — feeds source in chunks of `chunkSize` bytes.
+ * Measures per-chunk parse time individually for accurate median/p95.
+ */
+export function benchStreaming(
+  name: string,
+  parseFn: (src: string, state?: unknown) => { state: unknown },
+  src: string,
+  chunkSize: number,
+  warmup: number,
+  iterations: number,
+): StreamBenchResult {
+  const chunks: Array<string> = [];
+  for (let i = 0; i < src.length; i += chunkSize) {
+    chunks.push(src.slice(i, Math.min(i + chunkSize, src.length)));
+  }
+  const numChunks = chunks.length;
+
+  // Warmup
+  for (let w = 0; w < warmup; w++) {
+    let state: unknown = null;
+    let accumulated = "";
+    for (let c = 0; c < numChunks; c++) {
+      accumulated += chunks[c]!;
+      state = parseFn(accumulated, state).state;
+    }
+  }
+
+  // Measure: collect per-chunk times across all iterations
+  const chunkTimes: Array<number> = [];
+  const totalTimes: Array<number> = [];
+
+  for (let iter = 0; iter < iterations; iter++) {
+    const totalStart = performance.now();
+    let state: unknown = null;
+    let accumulated = "";
+    for (let c = 0; c < numChunks; c++) {
+      accumulated += chunks[c]!;
+      const t0 = performance.now();
+      state = parseFn(accumulated, state).state;
+      chunkTimes.push(performance.now() - t0);
+    }
+    totalTimes.push(performance.now() - totalStart);
+  }
+
+  chunkTimes.sort((a, b) => a - b);
+  totalTimes.sort((a, b) => a - b);
+
+  const totalMs = totalTimes[Math.floor(totalTimes.length / 2)]!;
+  const perChunkMedianMs = chunkTimes[Math.floor(chunkTimes.length / 2)]!;
+  const throughput = src.length / 1024 / 1024 / (totalMs / 1000);
+
+  return { name, chunkSize, totalMs, perChunkMedianMs, throughput, numChunks };
+}

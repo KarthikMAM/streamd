@@ -5,7 +5,9 @@
   "description": "Performance benchmarks for @streamd/parser",
   "type": "module",
   "scripts": {
-    "bench": "tsx src/index.ts",
+    "bench": "turbo run build --filter=@streamd/parser && tsx src/index.ts",
+    "bench:baseline": "turbo run build --filter=@streamd/parser && tsx src/baseline.ts",
+    "bench:profile": "turbo run build --filter=@streamd/parser && tsx src/profile-streaming.ts",
     "build": "tsdown",
     "bench:browser": "tsdown && node serve.js",
     "serve": "node serve.js"

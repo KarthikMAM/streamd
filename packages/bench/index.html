@@ -15,12 +15,14 @@
   h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
   .subtitle { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem; }
   .controls { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; }
-  select, button { font-size: 0.875rem; padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+  select, input, button { font-size: 0.875rem; padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+  input[type=number] { width: 80px; cursor: text; }
   button { background: var(--accent); color: #000; font-weight: 600; border: none; }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   button:hover:not(:disabled) { filter: brightness(1.1); }
   .status { color: var(--text-muted); font-size: 0.8rem; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  label { color: var(--text-muted); font-size: 0.8rem; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; position: relative; transition: border-color 0.2s; }
   .card.best { border-color: var(--green); }
   .card-name { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
@@ -40,12 +42,13 @@
   .section-title { font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem; }
   .progress { height: 4px; background: var(--border); border-radius: 2px; margin-bottom: 1rem; overflow: hidden; }
   .progress-bar { height: 100%; background: var(--accent); transition: width 0.3s; }
+  .mode-desc { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 1rem; padding: 0.75rem; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); }
 </style>
 </head>
 <body>
 
 <h1>@streamd/parser Benchmark</h1>
-<p class="subtitle">Compare parsing throughput across markdown parsers — runs entirely in your browser.</p>
+<p class="subtitle">Compare parsing performance across markdown parsers — runs entirely in your browser.</p>
 <p class="subtitle" id="precisionNote" style="color: var(--yellow)"></p>
 
 <div class="controls">
@@ -57,9 +60,17 @@
     <option value="pathological-star">Pathological *×10000</option>
     <option value="pathological-bq">Pathological >×200</option>
   </select>
+  <select id="modeSelect">
+    <option value="static" selected>Static Parse</option>
+    <option value="streaming">Streaming</option>
+  </select>
+  <label>Chunk size: <input type="number" id="chunkSize" value="200" min="1" max="10000"></label>
+  <label>Iterations: <input type="number" id="iterations" value="" min="0" max="100000" placeholder="auto"></label>
   <button id="runBtn" type="button">Run Benchmark</button>
   <span id="status" class="status">Ready</span>
 </div>
+
+<div id="modeDesc" class="mode-desc" style="display:none"></div>
 
 <div class="progress" id="progressWrap" style="display:none">
   <div class="progress-bar" id="progressBar" style="width:0%"></div>
@@ -69,7 +80,7 @@
 
 <h3 class="section-title" id="tableTitle" style="display:none">Detailed Results</h3>
 <table id="resultsTable" style="display:none">
-  <thead><tr><th>Parser</th><th>Median</th><th>p95</th><th>Ops/s</th><th>Throughput</th></tr></thead>
+  <thead id="resultsHead"></thead>
   <tbody id="resultsBody"></tbody>
 </table>
 
@@ -79,19 +90,24 @@ import { CommonmarkParser, MarkdownIt, marked, streamdParse } from './dist/brows
 const mdIt = new MarkdownIt();
 const cmParser = new CommonmarkParser();
 
-// --- Timer precision detection ---
+// --- Timer precision ---
 const isHighRes = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
 const precisionNote = document.getElementById('precisionNote');
 if (isHighRes) {
   precisionNote.textContent = '\u2713 High precision timers (cross-origin isolated).';
   precisionNote.style.color = 'var(--green)';
 } else {
-  precisionNote.textContent = '\u26A0 Low precision timers (100\u00B5s). Run: cd packages/bench && bun run bench:browser';
+  precisionNote.textContent = '\u26A0 Low precision timers (100\u00B5s). Serve with COOP/COEP headers for full precision.';
 }
 
-// --- Yield to event loop so UI updates between parsers ---
 function nextFrame() {
   return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+}
+
+function fmtTime(ms) {
+  if (ms < 0.001) return (ms * 1000000).toFixed(0) + ' ns';
+  if (ms < 1) return (ms * 1000).toFixed(0) + ' \u00B5s';
+  return ms.toFixed(2) + ' ms';
 }
 
 // --- Input generators ---
@@ -113,62 +129,7 @@ function generateMixed(sizeKb) {
   return parts.join("").slice(0, sizeKb * 1024);
 }
 
-const SAMPLE_MD = `# Building Modern React Applications
-
-**Published:** December 9, 2025 | **Reading Time:** 8 minutes
-
----
-
-## Introduction
-
-React has evolved significantly, and 2025 brings exciting new patterns and best practices for building scalable applications. In this guide, we'll explore the latest trends that **every React developer** should know.
-
-For more information, visit the official [React documentation](https://react.dev).
-
-### Key Topics
-
-1. **Server Components** - The future of React
-2. **Performance Optimization** - Making your apps blazing fast
-3. **State Management** - Modern approaches
-
----
-
-## Server Components: A Game Changer
-
-| Approach | Bundle Size | Load Time |
-|----------|------------|-----------|
-| Traditional SPA | **250 KB** | 2.5s |
-| SSR | **180 KB** | 1.8s |
-| RSC | **120 KB** | 1.2s |
-
-> "Server Components are a fundamental shift in how we architect React applications."
->
-> \u2014 [Dan Abramov](https://twitter.com/dan_abramov)
-
-### Code Splitting
-
-\\\`\\\`\\\`typescript
-import { lazy, Suspense } from "react";
-const Dashboard = lazy(() => import("./Dashboard"));
-\\\`\\\`\\\`
-
-### Memoization
-
-- Use \\\`useMemo\\\` for expensive calculations
-- Use \\\`useCallback\\\` for function references
-- ~~Don't~~ use them for simple values
-
-## Features Checklist
-
-- [x] Server-side data fetching
-- [x] Optimistic UI updates
-- [ ] Advanced filtering
-- [ ] Export functionality
-
----
-
-*Last updated: December 9, 2025*
-`;
+const SAMPLE_MD = `# Building Modern React Applications\n\n**Published:** December 9, 2025 | **Reading Time:** 8 minutes\n\n---\n\n## Introduction\n\nReact has evolved significantly. In this guide, we explore the latest trends that **every React developer** should know.\n\nFor more information, visit the official [React documentation](https://react.dev).\n\n### Key Topics\n\n1. **Server Components** - The future of React\n2. **Performance Optimization** - Making your apps blazing fast\n3. **State Management** - Modern approaches\n\n---\n\n## Server Components\n\n| Approach | Bundle Size | Load Time |\n|----------|------------|----------|\n| Traditional SPA | **250 KB** | 2.5s |\n| SSR | **180 KB** | 1.8s |\n| RSC | **120 KB** | 1.2s |\n\n> "Server Components are a fundamental shift in how we architect React applications."\n\n\`\`\`typescript\nimport { lazy, Suspense } from "react";\nconst Dashboard = lazy(() => import("./Dashboard"));\n\`\`\`\n\n- Use \`useMemo\` for expensive calculations\n- Use \`useCallback\` for function references\n- ~~Don't~~ use them for simple values\n\n## Features Checklist\n\n- [x] Server-side data fetching\n- [x] Optimistic UI updates\n- [ ] Advanced filtering\n- [ ] Export functionality\n\n---\n\n*Last updated: December 9, 2025*\n`;
 
 const INPUTS = {
   'synthetic-1': () => generateMixed(1),
@@ -179,18 +140,17 @@ const INPUTS = {
   'pathological-bq': () => '> '.repeat(200) + 'text',
 };
 
-// --- Parsers ---
+// --- All parsers ---
 const PARSERS = [
-  { name: '@streamd/parser', fn: (s) => streamdParse(s) },
-  { name: 'marked', fn: (s) => marked.lexer(s) },
-  { name: 'markdown-it', fn: (s) => mdIt.parse(s, {}) },
-  { name: 'commonmark.js', fn: (s) => cmParser.parse(s) },
+  { name: '@streamd/parser', fn: (s) => streamdParse(s), color: 'var(--accent)' },
+  { name: 'marked', fn: (s) => marked.lexer(s), color: '#f97316' },
+  { name: 'markdown-it', fn: (s) => mdIt.parse(s, {}), color: '#a855f7' },
+  { name: 'commonmark.js', fn: (s) => cmParser.parse(s), color: '#ec4899' },
 ];
 
-// --- Benchmark runner ---
-// Runs warmup, then measures in batches, yielding between batches
-// so the UI stays responsive even on large inputs.
-function runSync(fn, src, iterations) {
+// --- Static benchmark ---
+function runStatic(fn, src, warmup, iterations) {
+  for (let i = 0; i < warmup; i++) fn(src);
   const times = new Float64Array(iterations);
   for (let i = 0; i < iterations; i++) {
     const t0 = performance.now();
@@ -205,12 +165,77 @@ function computeStats(name, times, srcLen) {
   const len = sorted.length;
   const median = sorted[Math.floor(len / 2)] || 0.001;
   const p95 = sorted[Math.floor(len * 0.95)] || 0.001;
-  const min = sorted[0] || 0.001;
-  const max = sorted[len - 1] || 0.001;
-  const avg = sorted.reduce((a, b) => a + b, 0) / len;
   const opsPerSec = median > 0.0001 ? 1000 / median : 999999;
   const throughput = median > 0.0001 ? (srcLen / 1048576) / (median / 1000) : 999999;
-  return { name, median, p95, min, max, avg, opsPerSec, throughput };
+  return { name, median, p95, opsPerSec, throughput };
+}
+
+// --- Streaming benchmark (fair: same accumulated string for all parsers) ---
+function benchStreamingFair(name, parseFn, src, chunkSize, warmup, iterations) {
+  const boundaries = [];
+  for (let i = chunkSize; i < src.length; i += chunkSize) boundaries.push(i);
+  boundaries.push(src.length);
+  const numChunks = boundaries.length;
+
+  // Warmup
+  for (let w = 0; w < warmup; w++) {
+    let state = null;
+    for (let c = 0; c < numChunks; c++) {
+      state = parseFn(src.slice(0, boundaries[c]), state);
+    }
+  }
+
+  // Measure
+  const chunkTimes = [];
+  const totalTimes = [];
+  for (let iter = 0; iter < iterations; iter++) {
+    const totalStart = performance.now();
+    let state = null;
+    for (let c = 0; c < numChunks; c++) {
+      const accumulated = src.slice(0, boundaries[c]);
+      const t0 = performance.now();
+      state = parseFn(accumulated, state);
+      chunkTimes.push(performance.now() - t0);
+    }
+    totalTimes.push(performance.now() - totalStart);
+  }
+
+  chunkTimes.sort((a, b) => a - b);
+  totalTimes.sort((a, b) => a - b);
+  const totalMs = totalTimes[Math.floor(totalTimes.length / 2)] || 0.001;
+  const perChunkMedian = chunkTimes[Math.floor(chunkTimes.length / 2)] || 0.0001;
+  const throughput = totalMs > 0.0001 ? (src.length / 1048576) / (totalMs / 1000) : 999999;
+  return { name, numChunks, totalMs, perChunkMedian, throughput };
+}
+
+// --- UI rendering ---
+function renderCards(results, metric) {
+  const el = document.getElementById('cards');
+  const values = results.map(r => r[metric]);
+  const fastest = Math.max(...values);
+  const slowest = Math.min(...values);
+
+  el.innerHTML = results.map(r => {
+    const isBest = r[metric] === fastest;
+    const ratio = slowest > 0.001 ? (r[metric] / slowest).toFixed(1) : '\u2014';
+    return `<div class="card ${isBest ? 'best' : ''}">
+      ${isBest ? '<span class="badge">FASTEST</span>' : ''}
+      <div class="card-name">${r.name}</div>
+      <div class="card-hero">${ratio}<span class="card-hero-unit">\u00D7</span></div>
+      <div class="stats">${r.stats.map(s =>
+        `<div class="stat"><span class="stat-label">${s[0]}</span><span class="stat-value">${s[1]}</span></div>`
+      ).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderTable(headers, rows) {
+  document.getElementById('resultsHead').innerHTML = '<tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
+  document.getElementById('resultsBody').innerHTML = rows.map(r =>
+    '<tr>' + r.map(c => `<td>${c}</td>`).join('') + '</tr>'
+  ).join('');
+  document.getElementById('resultsTable').style.display = '';
+  document.getElementById('tableTitle').style.display = '';
 }
 
 function chooseIterations(srcLen) {
@@ -219,52 +244,98 @@ function chooseIterations(srcLen) {
   return { warmup: 100, iterations: 1000 };
 }
 
-// --- UI rendering ---
-function renderCards(results) {
-  const el = document.getElementById('cards');
-  const fastest = Math.max(...results.map(r => r.throughput));
-  const slowest = Math.min(...results.map(r => r.throughput));
-
-  el.innerHTML = results.map(r => {
-    const isBest = r.throughput === fastest;
-    const ratio = slowest > 0.001 ? (r.throughput / slowest).toFixed(1) : '\u2014';
-    return `<div class="card ${isBest ? 'best' : ''}">
-      ${isBest ? '<span class="badge">FASTEST</span>' : ''}
-      <div class="card-name">${r.name}</div>
-      <div class="card-hero">${ratio}<span class="card-hero-unit">\u00D7 faster</span></div>
-      <div class="stats">
-        <div class="stat"><span class="stat-label">Throughput</span><span class="stat-value">${r.throughput.toFixed(1)} MB/s</span></div>
-        <div class="stat"><span class="stat-label">Ops/s</span><span class="stat-value">${r.opsPerSec.toFixed(0)}</span></div>
-        <div class="stat"><span class="stat-label">Median</span><span class="stat-value">${fmtTime(r.median)}</span></div>
-        <div class="stat"><span class="stat-label">p95</span><span class="stat-value">${fmtTime(r.p95)}</span></div>
-        <div class="stat"><span class="stat-label">Min</span><span class="stat-value">${fmtTime(r.min)}</span></div>
-        <div class="stat"><span class="stat-label">Max</span><span class="stat-value">${fmtTime(r.max)}</span></div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function renderTable(results) {
-  const tbody = document.getElementById('resultsBody');
-  tbody.innerHTML = results.map(r => `<tr>
-    <td>${r.name}</td>
-    <td>${fmtTime(r.median)}</td>
-    <td>${fmtTime(r.p95)}</td>
-    <td>${r.opsPerSec.toFixed(0)}</td>
-    <td>${r.throughput.toFixed(1)} MB/s</td>
-  </tr>`).join('');
-  document.getElementById('resultsTable').style.display = '';
-  document.getElementById('tableTitle').style.display = '';
-}
-
-function fmtTime(ms) {
-  if (ms < 0.001) return `${(ms * 1000000).toFixed(0)} ns`;
-  if (ms < 1) return `${(ms * 1000).toFixed(0)} \u00B5s`;
-  return `${ms.toFixed(2)} ms`;
-}
-
-// --- Main benchmark loop ---
+// --- Main ---
 let running = false;
+
+async function runStreamingBench(src, sizeKb, chunkSize, status, progressBar, modeDesc) {
+  modeDesc.style.display = '';
+  modeDesc.innerHTML = `<strong>Streaming simulation</strong>: ${sizeKb} KB input, ${chunkSize}B chunks (${Math.ceil(src.length / chunkSize)} chunks total).<br>` +
+    `All parsers receive the same accumulated source string on each chunk.<br>` +
+    `<strong>@streamd/parser</strong> uses incremental state \u2014 others re-parse from scratch.`;
+
+  const userIter = parseInt(document.getElementById('iterations').value, 10) || 0;
+  const iterations = userIter > 0 ? userIter : (src.length > 100000 ? 10 : 30);
+  const warmup = Math.max(3, Math.floor(iterations / 5));
+  const total = PARSERS.length;
+  const results = [];
+
+  for (let i = 0; i < total; i++) {
+    const p = PARSERS[i];
+    status.textContent = `Benchmarking ${p.name}... (${i + 1}/${total})`;
+    progressBar.style.width = `${((i + 0.5) / total) * 100}%`;
+    await nextFrame();
+
+    const parseFn = p.name === '@streamd/parser'
+      ? (acc, state) => streamdParse(acc, state).state
+      : (acc) => { p.fn(acc); return null; };
+
+    const r = benchStreamingFair(p.name, parseFn, src, chunkSize, warmup, iterations);
+    results.push({
+      ...r,
+      stats: [
+        ['Throughput', r.throughput.toFixed(1) + ' MB/s'],
+        ['Total', fmtTime(r.totalMs)],
+        ['Per chunk', fmtTime(r.perChunkMedian)],
+        ['Chunks', String(r.numChunks)],
+      ],
+    });
+    progressBar.style.width = `${((i + 1) / total) * 100}%`;
+    await nextFrame();
+  }
+
+  renderCards(results, 'throughput');
+  renderTable(
+    ['Parser', 'Chunks', 'Total', 'Per chunk (median)', 'Throughput'],
+    results.map(r => [r.name, r.numChunks, fmtTime(r.totalMs), fmtTime(r.perChunkMedian), r.throughput.toFixed(1) + ' MB/s']),
+  );
+  return `Done \u2014 streaming ${sizeKb} KB in ${chunkSize}B chunks.`;
+}
+
+async function runStaticBench(src, sizeKb, status, progressBar, modeDesc) {
+  modeDesc.style.display = '';
+  modeDesc.innerHTML = `<strong>Static parse</strong>: ${sizeKb} KB input. Each parser parses the full document once per iteration.`;
+
+  const userIter = parseInt(document.getElementById('iterations').value, 10) || 0;
+  const auto = chooseIterations(src.length);
+  const warmup = userIter > 0 ? Math.max(10, Math.floor(userIter / 5)) : auto.warmup;
+  const iterations = userIter > 0 ? userIter : auto.iterations;
+  const total = PARSERS.length;
+  const results = [];
+
+  for (let i = 0; i < total; i++) {
+    const p = PARSERS[i];
+    status.textContent = `Warming up ${p.name}... (${i + 1}/${total})`;
+    progressBar.style.width = `${((i + 0.3) / total) * 100}%`;
+    await nextFrame();
+
+    runStatic(p.fn, src, warmup, 0);
+
+    status.textContent = `Measuring ${p.name}... (${i + 1}/${total})`;
+    progressBar.style.width = `${((i + 0.7) / total) * 100}%`;
+    await nextFrame();
+
+    const times = runStatic(p.fn, src, 0, iterations);
+    const s = computeStats(p.name, times, src.length);
+    results.push({
+      ...s,
+      stats: [
+        ['Throughput', s.throughput.toFixed(1) + ' MB/s'],
+        ['Ops/s', s.opsPerSec.toFixed(0)],
+        ['Median', fmtTime(s.median)],
+        ['p95', fmtTime(s.p95)],
+      ],
+    });
+    progressBar.style.width = `${((i + 1) / total) * 100}%`;
+    await nextFrame();
+  }
+
+  renderCards(results, 'throughput');
+  renderTable(
+    ['Parser', 'Median', 'p95', 'Ops/s', 'Throughput'],
+    results.map(r => [r.name, fmtTime(r.median), fmtTime(r.p95), r.opsPerSec.toFixed(0), r.throughput.toFixed(1) + ' MB/s']),
+  );
+  return `Done \u2014 ${iterations}\u00D7 iterations on ${sizeKb} KB input.`;
+}
 
 document.getElementById('runBtn').addEventListener('click', async () => {
   if (running) return;
@@ -272,56 +343,41 @@ document.getElementById('runBtn').addEventListener('click', async () => {
 
   const btn = document.getElementById('runBtn');
   const status = document.getElementById('status');
+  const modeDesc = document.getElementById('modeDesc');
   const progressWrap = document.getElementById('progressWrap');
   const progressBar = document.getElementById('progressBar');
+  const mode = document.getElementById('modeSelect').value;
+  const chunkSize = parseInt(document.getElementById('chunkSize').value, 10) || 200;
 
   btn.disabled = true;
   progressWrap.style.display = '';
   progressBar.style.width = '0%';
+  document.getElementById('cards').innerHTML = '';
+  document.getElementById('resultsTable').style.display = 'none';
+  document.getElementById('tableTitle').style.display = 'none';
 
   const inputKey = document.getElementById('inputSelect').value;
   const src = INPUTS[inputKey]();
   const sizeKb = (src.length / 1024).toFixed(1);
-  const { warmup, iterations } = chooseIterations(src.length);
 
-  status.textContent = `Input: ${sizeKb} KB \u2022 ${warmup} warmup + ${iterations} iterations`;
-  await nextFrame();
-
-  const results = [];
-
-  for (let i = 0; i < PARSERS.length; i++) {
-    const p = PARSERS[i];
-
-    // Update UI before each parser
-    status.textContent = `Warming up ${p.name}... (${i + 1}/${PARSERS.length})`;
-    progressBar.style.width = `${((i + 0.3) / PARSERS.length) * 100}%`;
-    await nextFrame();
-
-    // Warmup — separate from measurement, lets JIT stabilize
-    runSync(p.fn, src, warmup);
-
-    // Yield after warmup so UI can paint
-    status.textContent = `Measuring ${p.name}... (${i + 1}/${PARSERS.length})`;
-    progressBar.style.width = `${((i + 0.7) / PARSERS.length) * 100}%`;
-    await nextFrame();
-
-    // Measurement
-    const times = runSync(p.fn, src, iterations);
-    results.push(computeStats(p.name, times, src.length));
-
-    // Yield after measurement
-    progressBar.style.width = `${((i + 1) / PARSERS.length) * 100}%`;
-    await nextFrame();
+  if (mode === 'streaming') {
+    status.textContent = await runStreamingBench(src, sizeKb, chunkSize, status, progressBar, modeDesc);
+  } else {
+    status.textContent = await runStaticBench(src, sizeKb, status, progressBar, modeDesc);
   }
 
-  renderCards(results);
-  renderTable(results);
-
-  status.textContent = `Done \u2014 ${iterations}\u00D7 iterations on ${sizeKb} KB input.`;
   btn.disabled = false;
   progressWrap.style.display = 'none';
   running = false;
 });
+
+// Show/hide chunk size based on mode
+document.getElementById('modeSelect').addEventListener('change', (e) => {
+  document.getElementById('chunkSize').parentElement.style.display =
+    e.target.value === 'streaming' ? '' : 'none';
+});
+// Initial state
+document.getElementById('chunkSize').parentElement.style.display = 'none';
 </script>
 
 </body>
