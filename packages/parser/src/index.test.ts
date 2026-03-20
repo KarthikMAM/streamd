@@ -88,15 +88,12 @@ describe("parse", () => {
   });
 
   describe("streaming", () => {
-    it("should parse chunks incrementally", () => {
+    it("should parse incrementally with full source", () => {
       const { state: s1 } = parse("# Hello\n", null);
       expect(s1).toBeDefined();
 
-      const { tokens: t2, state: s2 } = parse("world\n", s1);
+      const { tokens: t2 } = parse("# Hello\nworld\n", s1);
       expect(t2.length).toBeGreaterThan(0);
-
-      const { tokens: t3 } = parse("", s2); // flush
-      expect(t3.length).toBeGreaterThan(0);
     });
   });
 

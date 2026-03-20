@@ -138,10 +138,13 @@ Engineering standards, performance constraints, and code style conventions for `
 - Container assembly (`assembleBlockquote`) re-scans inner content with `scanBlocks` recursively, with a 100-level nesting depth guard.
 
 ### Streaming
-- `StreamState` tracks accumulated source, options, and last scan results.
-- Each chunk appends to source, re-scans complete lines with `scanBlocks`.
-- `parse("", state)` flushes by re-scanning the full accumulated source.
-- `stableCount = tokens.length - 1` (last block is speculative).
+- Streaming logic lives in `streaming/` module: `state.ts`, `fast-path.ts`, `incremental.ts`.
+- `StreamState` tracks previous source length, options, cached completed tokens/refMap, and active block metadata (kind, content start, fence info, cached inlines).
+- Caller passes the full accumulated source each time. Parser diffs against `prevLen` to detect new content, then applies fast paths or falls back to scanning the active block region.
+- Fast paths (checked in order): text-append O(K), fenced code O(K), math block O(K), paragraph continuation O(K)+O(N) inlines, full scan.
+- Completed blocks are promoted and cached; only the last (active) block is re-assembled speculatively.
+- No flush needed — the last call's tokens are final.
+- `stableCount = completedTokens.length` (last block is speculative).
 
 ### GFM Options Resolution
 - `gfm: true` enables `tables`, `strikethrough`, `taskListItems`, `autolinks` unless individually overridden.
