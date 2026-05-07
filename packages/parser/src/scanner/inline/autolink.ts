@@ -132,6 +132,9 @@ function scanScheme(src: string, pos: number, end: number): number {
  * Check if a charCode is valid in an email local-part per spec §6.5.
  *
  * Valid chars: `[a-zA-Z0-9.!#$%&'*+/=?^_\`{|}~-]`
+ *
+ * @param code - Character code to test
+ * @returns True if valid in email local-part
  */
 function isEmailLocalChar(code: number): boolean {
   if (isAlpha(code)) return true;
@@ -162,6 +165,9 @@ function isEmailLocalChar(code: number): boolean {
 
 /**
  * Check if a charCode is valid in an email domain label.
+ *
+ * @param code - Character code to test
+ * @returns True if alphanumeric or dash
  */
 function isEmailDomainChar(code: number): boolean {
   return isAlpha(code) || (code >= CC_0 && code <= CC_9) || code === CC_DASH;

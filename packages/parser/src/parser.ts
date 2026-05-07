@@ -33,7 +33,15 @@ export function parse(
   return streamingParse(src, state as unknown as StreamState);
 }
 
-/** Create a pre-configured parser with bound options. */
+/**
+ * Create a pre-configured parser with bound options.
+ *
+ * Returns a parse function that uses the frozen options on every call,
+ * avoiding repeated option resolution overhead.
+ *
+ * @param options - Parser configuration to freeze
+ * @returns Bound parse function accepting (src, state?)
+ */
 export function createParser(
   options?: ParseOptions,
 ): (src: string, state?: ParserState | null) => ParseResult {
@@ -41,6 +49,9 @@ export function createParser(
   return (src: string, state?: ParserState | null) => parse(src, state, frozenOptions);
 }
 
+/**
+ * Resolved parse options with all booleans explicitly set.
+ */
 interface ResolvedOptions {
   math: boolean;
   tables: boolean;
@@ -49,6 +60,15 @@ interface ResolvedOptions {
   autolinks: boolean;
 }
 
+/**
+ * Resolve user-facing ParseOptions into explicit booleans.
+ *
+ * GFM flag enables tables, strikethrough, taskListItems, and autolinks
+ * unless individually overridden.
+ *
+ * @param options - User-provided parse options
+ * @returns Fully resolved options with no undefined values
+ */
 function resolveOptions(options?: ParseOptions): ResolvedOptions {
   const gfm = options?.gfm ?? false;
   return {
@@ -60,6 +80,12 @@ function resolveOptions(options?: ParseOptions): ResolvedOptions {
   };
 }
 
+/**
+ * Convert resolved options to the AssembleOpts shape used internally.
+ *
+ * @param resolved - Fully resolved parse options
+ * @returns AssembleOpts for threading through assembly
+ */
 function toAssembleOpts(resolved: ResolvedOptions): AssembleOpts {
   return {
     math: resolved.math,
@@ -70,7 +96,16 @@ function toAssembleOpts(resolved: ResolvedOptions): AssembleOpts {
   };
 }
 
-/** Full document parse -- no prior state. */
+/**
+ * Full document parse — no prior state.
+ *
+ * Scans all blocks, assembles the token tree, and returns a ParseResult
+ * with stableCount equal to the full token count (all tokens are final).
+ *
+ * @param src - Complete markdown source
+ * @param options - Parser configuration
+ * @returns ParseResult with all tokens finalized
+ */
 function fullParse(src: string, options?: ParseOptions): ParseResult {
   const resolved = resolveOptions(options);
   const opts = toAssembleOpts(resolved);

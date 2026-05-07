@@ -1,10 +1,23 @@
 {
+  "$schema": "https://unpkg.com/@changesets/config@3.0.5/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
   "fixed": [],
-  "linked": [],
+  "linked": [
+    [
+      "@streamd/parser",
+      "@streamd/tokens",
+      "@streamd/html",
+      "@streamd/react",
+      "@streamd/react-native",
+      "@streamd/plugins",
+      "@streamd/plugin-shiki",
+      "@streamd/plugin-katex",
+      "@streamd/cli"
+    ]
+  ],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@streamd/docs", "@streamd/tsconfig"]
+  "ignore": ["@streamd/bench", "@streamd/spec", "@streamd/e2e", "@streamd/config"]
 }

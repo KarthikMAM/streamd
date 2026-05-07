@@ -90,6 +90,13 @@ export function scanList(src: string, bs: number, ordered: boolean, taskListItem
 
 /**
  * Check if position starts a list item of the given type.
+ *
+ * @param src - Source string
+ * @param fns - First non-space position
+ * @param lineEnd - End of line boundary
+ * @param ordered - Whether checking for ordered list items
+ * @param marker - Expected marker char code (-1 for first item)
+ * @returns True if the position starts a valid list item
  */
 function isListItemStart(
   src: string,
@@ -113,7 +120,15 @@ export function isOrderedListStart(src: string, fns: number, lineEnd: number): b
   return isOrderedListItem(src, fns, lineEnd);
 }
 
-/** Internal ordered list item check. Spec §5.2: max 9 digits. */
+/**
+ * Check if position starts an ordered list item (digits + . or ) + space).
+ * Spec §5.2: max 9 digits.
+ *
+ * @param src - Source string
+ * @param fns - First non-space position
+ * @param lineEnd - End of line boundary
+ * @returns True if the position starts a valid ordered list item
+ */
 function isOrderedListItem(src: string, fns: number, lineEnd: number): boolean {
   let p = fns;
   if (p >= lineEnd) return false;
@@ -131,7 +146,14 @@ function isOrderedListItem(src: string, fns: number, lineEnd: number): boolean {
   return p + 1 < lineEnd && src.charCodeAt(p + 1) === CC_SPACE;
 }
 
-/** Parse the start number from an ordered list item. */
+/**
+ * Parse the start number from an ordered list item.
+ *
+ * @param src - Source string
+ * @param fns - First non-space position (start of digits)
+ * @param lineEnd - End of line boundary
+ * @returns The numeric start value of the ordered list item
+ */
 function parseOrderedStart(src: string, fns: number, lineEnd: number): number {
   let p = fns;
   let num = 0;

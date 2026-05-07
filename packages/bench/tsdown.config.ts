@@ -1,3 +1,4 @@
+/** tsdown build config for the browser benchmark bundle. */
 import { baseConfig } from "@streamd/config/tsdown";
 import { defineConfig } from "tsdown";
 

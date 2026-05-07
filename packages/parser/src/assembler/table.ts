@@ -10,10 +10,10 @@ import type { Block } from "../scanner/block/types";
 import { findLineEndFast, isSpaceOrTab, nextLine } from "../scanner/block/utils";
 import { CC_BACKSLASH, CC_PIPE } from "../scanner/constants";
 import { parseInlines } from "../scanner/inline/scan";
-import type { LinkReference } from "../types/internal";
+import type { LinkReference, SourceRange } from "../types/internal";
 import type { InlineToken, Token } from "../types/tokens";
 import { createTableToken } from "../utils/token-factory";
-import type { AssembleOpts } from "./assemble";
+import type { AssembleOpts } from "./types";
 
 /** Assemble a GFM table from a flat block. */
 export function assembleTable(
@@ -25,7 +25,7 @@ export function assembleTable(
   const align = block.align;
   const numCols = Math.min(align.length, 128);
 
-  const rows: Array<{ start: number; end: number }> = [];
+  const rows: Array<SourceRange> = [];
   let pos = block.contentStart;
   while (pos <= block.contentEnd && pos < src.length) {
     const le = findLineEndFast(src, pos);
@@ -73,12 +73,8 @@ export function assembleTable(
 }
 
 /** Split a pipe-delimited row into cell ranges. */
-function splitPipeCells(
-  src: string,
-  start: number,
-  end: number,
-): Array<{ start: number; end: number }> {
-  const cells: Array<{ start: number; end: number }> = [];
+function splitPipeCells(src: string, start: number, end: number): Array<SourceRange> {
+  const cells: Array<SourceRange> = [];
   let pos = start;
 
   while (pos < end && isSpaceOrTab(src.charCodeAt(pos))) pos++;
@@ -107,7 +103,7 @@ function splitPipeCells(
 }
 
 /** Trim whitespace from a cell range. */
-function trimCellRange(src: string, start: number, end: number): { start: number; end: number } {
+function trimCellRange(src: string, start: number, end: number): SourceRange {
   while (start < end && isSpaceOrTab(src.charCodeAt(start))) start++;
   while (end > start && isSpaceOrTab(src.charCodeAt(end - 1))) end--;
   return { start, end };

@@ -1,0 +1,22 @@
+{
+  "name": "@streamd/html-demo",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Node CLI + static web demo for @streamd/html",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "start": "node cli.mjs",
+    "serve": "npm run build && node serve.mjs",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@streamd/html": "*",
+    "@streamd/parser": "*",
+    "@streamd/tokens": "*"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,43 @@
+[
+  {
+    "name": "@streamd/parser — ESM (with deps)",
+    "path": "packages/parser/dist/index.mjs",
+    "limit": "15 KB"
+  },
+  {
+    "name": "@streamd/tokens — ESM (with deps)",
+    "path": "packages/tokens/dist/index.mjs",
+    "limit": "3 KB"
+  },
+  {
+    "name": "@streamd/plugins — ESM (with deps, excluding parser)",
+    "path": "packages/plugins/dist/index.mjs",
+    "limit": "5 KB",
+    "ignore": ["@streamd/parser"]
+  },
+  {
+    "name": "@streamd/html — ESM (excluding parser + plugins + tokens)",
+    "path": "packages/html/dist/index.mjs",
+    "limit": "15 KB",
+    "ignore": ["@streamd/parser", "@streamd/plugins", "@streamd/tokens"]
+  },
+  {
+    "name": "@streamd/react — ESM (excluding peer deps + streamd deps)",
+    "path": "packages/react/dist/index.mjs",
+    "limit": "15 KB",
+    "ignore": ["react", "react-dom", "@streamd/parser", "@streamd/plugins", "@streamd/tokens"]
+  },
+  {
+    "name": "@streamd/react-native — ESM (excluding peer deps + streamd deps)",
+    "path": "packages/react-native/dist/index.mjs",
+    "limit": "10 KB",
+    "ignore": [
+      "react",
+      "react-native",
+      "react-dom",
+      "@streamd/parser",
+      "@streamd/plugins",
+      "@streamd/tokens"
+    ]
+  }
+]

@@ -28,16 +28,20 @@ import { assembleBlockquote, assembleList } from "./container";
 import { assembleTable } from "./table";
 
 /** Options threaded through assembly for inline parsing. */
-export interface AssembleOpts {
-  math: boolean;
-  strikethrough: boolean;
-  autolinks: boolean;
-  tables: boolean;
-  taskListItems: boolean;
-}
+export type { AssembleOpts } from "./types";
+
+import type { AssembleOpts } from "./types";
 
 /**
  * Assemble a flat block array into the public token tree.
+ *
+ * Extracts link reference definitions first, then converts each non-consumed
+ * block into a public token. Container blocks are recursively assembled.
+ *
+ * @param src - Full source string
+ * @param blocks - Flat array of scanned blocks
+ * @param opts - Assembly options (GFM feature flags)
+ * @returns Ordered list of public tokens
  */
 export function assemble(src: string, blocks: Array<Block>, opts: AssembleOpts): TokensList {
   const refMap = new Map<string, LinkReference>();
@@ -88,7 +92,18 @@ export function extractAllLinkRefDefs(
   return consumed;
 }
 
-/** Assemble a single Block into a Token. */
+/**
+ * Assemble a single Block into a Token.
+ *
+ * Dispatches on BlockKind to produce the appropriate public token.
+ * Returns null for blocks that produce no output (e.g., consumed link ref defs).
+ *
+ * @param src - Full source string
+ * @param block - The block record to assemble
+ * @param refMap - Accumulated link reference definitions
+ * @param opts - Assembly options (GFM feature flags)
+ * @returns Public token or null if the block produces no output
+ */
 export function assembleBlock(
   src: string,
   block: Block,

@@ -104,7 +104,12 @@ export function scanHtmlInline(src: string, pos: number, end: number): ScanResul
 
 /**
  * If `scanEnd > 0`, emit an HtmlInlineToken for `src[pos..scanEnd)`.
- * Otherwise return null. Consolidates the repeated emit pattern.
+ * Consolidates the repeated emit pattern across inline HTML sub-scanners.
+ *
+ * @param src - Source string
+ * @param pos - Start position of the HTML construct
+ * @param scanEnd - End position from the sub-scanner, or -1/0 on failure
+ * @returns Shared result or null
  */
 function emitSlice(src: string, pos: number, scanEnd: number): ScanResult | null {
   if (scanEnd <= 0) return null;
@@ -114,14 +119,32 @@ function emitSlice(src: string, pos: number, scanEnd: number): ScanResult | null
   return RESULT;
 }
 
+/**
+ * Check if a charCode is valid in an HTML tag name after the first character.
+ *
+ * @param code - Character code to test
+ * @returns True if alphanumeric or dash
+ */
 function isTagNameChar(code: number): boolean {
   return isAlpha(code) || (code >= CC_0 && code <= CC_9) || code === CC_DASH;
 }
 
+/**
+ * Check if a charCode can start an HTML attribute name.
+ *
+ * @param code - Character code to test
+ * @returns True if alpha, underscore, or colon
+ */
 function isAttrNameStart(code: number): boolean {
   return isAlpha(code) || code === CC_UNDERSCORE || code === CC_COLON;
 }
 
+/**
+ * Check if a charCode is valid in an HTML attribute name.
+ *
+ * @param code - Character code to test
+ * @returns True if valid in attribute name position
+ */
 function isAttrNameChar(code: number): boolean {
   return (
     isAlpha(code) ||
@@ -133,6 +156,12 @@ function isAttrNameChar(code: number): boolean {
   );
 }
 
+/**
+ * Check if a charCode terminates an unquoted attribute value.
+ *
+ * @param code - Character code to test
+ * @returns True if the character ends an unquoted value
+ */
 function isUnquotedStop(code: number): boolean {
   return (
     code === CC_SPACE ||
@@ -147,7 +176,14 @@ function isUnquotedStop(code: number): boolean {
   );
 }
 
-/** Scan `<tagname attrs?>` or `<tagname attrs?/>`. Returns end pos or -1. */
+/**
+ * Scan an open tag `<tagname attrs?>` or self-closing `<tagname attrs?/>`.
+ *
+ * @param src - Source string
+ * @param pos - Position of the `<` character
+ * @param end - End boundary
+ * @returns End position past the `>`, or -1 on failure
+ */
 function scanOpenTag(src: string, pos: number, end: number): number {
   let i = pos + 1;
 
@@ -187,7 +223,6 @@ function scanOpenTag(src: string, pos: number, end: number): number {
         if (i >= end) return -1;
         i++;
       } else {
-        if (i >= end) return -1;
         while (i < end && !isUnquotedStop(src.charCodeAt(i))) i++;
       }
     }
@@ -196,7 +231,14 @@ function scanOpenTag(src: string, pos: number, end: number): number {
   return -1;
 }
 
-/** Scan `</tagname>`. Returns end pos or -1. */
+/**
+ * Scan a close tag `</tagname>`.
+ *
+ * @param src - Source string
+ * @param pos - Position of the `<` character
+ * @param end - End boundary
+ * @returns End position past the `>`, or -1 on failure
+ */
 function scanCloseTag(src: string, pos: number, end: number): number {
   let i = pos + 2;
 
@@ -210,7 +252,14 @@ function scanCloseTag(src: string, pos: number, end: number): number {
   return i + 1;
 }
 
-/** Scan `<!-- ... -->` (not `<!-->` or `<!--->` per spec). Returns end pos or -1. */
+/**
+ * Scan an HTML comment `<!-- ... -->` (not `<!-->` or `<!--->` per spec).
+ *
+ * @param src - Source string
+ * @param pos - Position of the `<` character
+ * @param end - End boundary
+ * @returns End position past `-->`, or -1 on failure
+ */
 function scanHtmlComment(src: string, pos: number, end: number): number {
   let i = pos + 4;
   if (i >= end) return -1;
@@ -232,7 +281,14 @@ function scanHtmlComment(src: string, pos: number, end: number): number {
   return -1;
 }
 
-/** Scan `<? ... ?>`. Returns end pos or -1. */
+/**
+ * Scan a processing instruction `<? ... ?>`.
+ *
+ * @param src - Source string
+ * @param pos - Position of the `<` character
+ * @param end - End boundary
+ * @returns End position past `?>`, or -1 on failure
+ */
 function scanProcessingInstruction(src: string, pos: number, end: number): number {
   let i = pos + 2;
 
@@ -244,7 +300,14 @@ function scanProcessingInstruction(src: string, pos: number, end: number): numbe
   return -1;
 }
 
-/** Scan `<!LETTER ... >`. Returns end pos or -1. */
+/**
+ * Scan an HTML declaration `<!LETTER ... >`.
+ *
+ * @param src - Source string
+ * @param pos - Position of the `<` character
+ * @param end - End boundary
+ * @returns End position past `>`, or -1 on failure
+ */
 function scanDeclaration(src: string, pos: number, end: number): number {
   let i = pos + 2;
 
@@ -260,7 +323,14 @@ function scanDeclaration(src: string, pos: number, end: number): number {
   return -1;
 }
 
-/** Scan `<![CDATA[ ... ]]>`. Returns end pos or -1. */
+/**
+ * Scan a CDATA section `<![CDATA[ ... ]]>`.
+ *
+ * @param src - Source string
+ * @param pos - Position of the `<` character
+ * @param end - End boundary
+ * @returns End position past `]]>`, or -1 on failure
+ */
 function scanCdata(src: string, pos: number, end: number): number {
   let i = pos + 9;
 

@@ -29,7 +29,9 @@ import { normalizeLabel } from "../utils/normalize";
 
 /** Shared result — avoids allocation per scan */
 const REF_RESULT = { consumed: 0 };
+/** Shared destination parse result — caller reads immediately after return. */
 const DEST_RESULT = { destination: "", end: 0 };
+/** Shared title parse result — caller reads immediately after return. */
 const TITLE_RESULT = { title: "", end: 0 };
 
 /**
@@ -217,6 +219,16 @@ export function parseLinkTitle(
   return null;
 }
 
+/**
+ * Skip spaces/tabs, then optionally one newline followed by more spaces/tabs.
+ *
+ * Used between link ref def components where a single line break is allowed.
+ *
+ * @param src - Source string
+ * @param pos - Current position
+ * @param end - End boundary
+ * @returns New position past the skipped whitespace
+ */
 function skipSpaceAndOneNewline(src: string, pos: number, end: number): number {
   pos = skipSpaces(src, pos, end);
 
@@ -230,7 +242,13 @@ function skipSpaceAndOneNewline(src: string, pos: number, end: number): number {
 
 /**
  * Build a string from a range, resolving backslash escapes.
- * OPT: only called when escapes are present — common case uses src.slice() — affects all.
+ *
+ * Only called when escapes are present — the common case uses src.slice().
+ *
+ * @param src - Source string
+ * @param start - Start of range (inclusive)
+ * @param end - End of range (exclusive)
+ * @returns String with backslash escapes resolved
  */
 function buildEscaped(src: string, start: number, end: number): string {
   let result = "";

@@ -320,17 +320,33 @@ function cacheActiveInlines(state: StreamState, activeTokens: Array<Token>): voi
   }
 }
 
-/** Reusable single-element array for InlineToken — avoids allocation in text-append path. */
+/**
+ * Create a single-element InlineToken array containing one Text token.
+ *
+ * @param text - Text content for the token
+ * @returns Array with one TextToken
+ */
 function SINGLE_TEXT_INLINES(text: string): Array<InlineToken> {
   return [createTextToken(text)];
 }
 
-/** Reusable single-element array for Token — avoids wrapper allocation. */
+/**
+ * Create a single-element Token array.
+ *
+ * @param token - The token to wrap
+ * @returns Array with one Token
+ */
 function SINGLE_TOKEN(token: Token): Array<Token> {
   return [token];
 }
 
-/** Build a ParseResult from completed tokens + active tokens. */
+/**
+ * Build a ParseResult from completed tokens + active tokens.
+ *
+ * @param state - Current streaming state
+ * @param activeTokens - Speculative tokens from the active block region
+ * @returns Complete ParseResult with stable count and opaque state
+ */
 function buildResult(state: StreamState, activeTokens: Array<Token>): ParseResult {
   const tokens = concatTokens(state.completedTokens, activeTokens);
   return {
@@ -340,7 +356,13 @@ function buildResult(state: StreamState, activeTokens: Array<Token>): ParseResul
   };
 }
 
-/** Concatenate two token arrays without mutation. */
+/**
+ * Concatenate two token arrays without mutation.
+ *
+ * @param a - First array (typically completed tokens)
+ * @param b - Second array (typically active/speculative tokens)
+ * @returns New array containing all elements of both inputs
+ */
 function concatTokens(a: Array<Token>, b: Array<Token>): Array<Token> {
   if (b.length === 0) return a;
   if (a.length === 0) return b;

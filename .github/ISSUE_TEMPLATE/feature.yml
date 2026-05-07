@@ -1,0 +1,88 @@
+name: Feature request
+description: Propose a new capability or an API addition
+title: "[Feature] "
+labels:
+  - feature
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature. Fill out every section — the
+        clearer the motivation and proposed API, the faster this can
+        be evaluated against the streaming invariants and steering
+        rules.
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: Target package
+      description: Which package would this feature live in?
+      options:
+        - "@streamd/parser"
+        - "@streamd/tokens"
+        - "@streamd/html"
+        - "@streamd/react"
+        - "@streamd/react-native"
+        - "@streamd/plugins"
+        - "@streamd/plugin-shiki"
+        - "@streamd/plugin-katex"
+        - "@streamd/cli"
+        - "new package"
+        - "monorepo tooling"
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: |
+        What are you trying to accomplish that streamd doesn't support
+        today? Describe the concrete problem, not the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API
+      description: |
+        Sketch the API or behaviour you'd expect. Code samples,
+        type signatures, or pseudo-code all work. Optional if you
+        only want to surface the use case for discussion.
+      render: ts
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other libraries, workarounds, or designs you evaluated first, and why they didn't fit.
+
+  - type: dropdown
+    id: willingness
+    attributes:
+      label: Willingness to PR
+      description: |
+        Are you open to implementing this yourself? Maintainers can
+        still scope and review regardless — this is just a signal of
+        contributor bandwidth.
+      options:
+        - "Yes — I'd like to submit a PR"
+        - "Maybe — with guidance or pairing"
+        - "No — proposing only"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: alignment
+    attributes:
+      label: Alignment with steering rules
+      description: |
+        Confirm the proposal fits the core invariants. See
+        `.kiro/steering/parser-design.md` and
+        `.kiro/steering/parser-conventions.md` for context.
+      options:
+        - label: Does not add runtime dependencies to `@streamd/parser`
+        - label: Does not break the streaming invariants (`stableCount`, monotonic promotion)
+        - label: Keeps per-package public API surface minimal (additive only)

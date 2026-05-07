@@ -80,7 +80,15 @@ export function scanCodeSpan(src: string, pos: number, end: number): ScanResult 
   return null;
 }
 
-/** Replace \n and \r\n with spaces — only allocates if line endings are present */
+/**
+ * Replace line endings (LF, CRLF) with spaces in code span content.
+ *
+ * Only allocates a new string if line endings are present — the common
+ * case (no line endings) returns the input unchanged.
+ *
+ * @param s - Code span content string
+ * @returns String with all line endings replaced by single spaces
+ */
 function replaceLineEndings(s: string): string {
   // Quick scan: check if any replacement is needed
   let hasLineEnding = false;

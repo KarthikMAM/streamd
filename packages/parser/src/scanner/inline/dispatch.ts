@@ -22,19 +22,45 @@ import {
   CC_W_LOWER,
 } from "../constants";
 
-// Handler indices — H_TEXT (0) is the default, never referenced in switch
+/**
+ * Inline handler indices — dense integers for dispatch table entries.
+ * H_TEXT (0) is the implicit default and never appears in switch cases.
+ * @group Handler Indices
+ */
+
+/** Handler: backslash escape (`\`). */
 export const H_ESCAPE = 1;
+/** Handler: code span (`` ` ``). */
 export const H_CODE = 2;
+/** Handler: emphasis/strikethrough delimiter (`*`, `_`, `~`). */
 export const H_DELIM = 3;
+/** Handler: link opener (`[`). */
 export const H_LINK = 4;
+/** Handler: image opener (`!`). */
 export const H_IMAGE = 5;
+/** Handler: spec autolink (`<`). */
 export const H_AUTOLINK = 6;
+/** Handler: HTML entity (`&`). */
 export const H_ENTITY = 7;
+/** Handler: newline (softbreak/hardbreak). */
 export const H_NEWLINE = 8;
+/** Handler: inline math (`$`). */
 export const H_MATH = 9;
+/** Handler: GFM extended autolink (`h`, `w` prefix). */
 export const H_GFM_AUTOLINK = 10;
 
-/** Build the dispatch table for the given feature flags. */
+/**
+ * Build the dispatch table for the given feature flags.
+ *
+ * Allocates a fresh Uint8Array(128) and populates handler indices for
+ * each markdown-special character. Conditional entries (math, autolinks,
+ * strikethrough) are only set when the corresponding flag is true.
+ *
+ * @param math - Enable `$` → H_MATH mapping
+ * @param autolinks - Enable `h`/`w` → H_GFM_AUTOLINK mapping
+ * @param strikethrough - Enable `~` → H_DELIM mapping
+ * @returns Fresh dispatch table with handler indices populated
+ */
 function buildInlineDispatch(
   math: boolean,
   autolinks: boolean,
@@ -59,10 +85,26 @@ function buildInlineDispatch(
   return table;
 }
 
-/** Dispatch table cache keyed by (math, autolinks, strikethrough) bitmask. */
+/**
+ * Dispatch table cache keyed by (math, autolinks, strikethrough) bitmask.
+ *
+ * Module-level because dispatch tables are stateless and immutable once built.
+ * Sharing across all parse calls avoids redundant allocation — at most 8
+ * variants exist (2^3 feature flag combinations).
+ */
 const DISPATCH_CACHE: Array<Uint8Array | undefined> = [];
 
-/** Select or build the dispatch table for the given flags. */
+/**
+ * Select or build the dispatch table for the given feature flags.
+ *
+ * Returns a cached Uint8Array(128) mapping ASCII codes to handler indices.
+ * Builds on first access for each flag combination, then reuses from cache.
+ *
+ * @param math - Whether inline math (`$...$`) is enabled
+ * @param autolinks - Whether GFM extended autolinks are enabled
+ * @param strikethrough - Whether GFM strikethrough (`~~`) is enabled
+ * @returns Uint8Array dispatch table for the inline scanner loop
+ */
 export function selectDispatch(
   math: boolean,
   autolinks: boolean,

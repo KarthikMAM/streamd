@@ -11,12 +11,19 @@ import { isPunctuation, isUnicodeWhitespace } from "../utils";
 
 /** Result shape for {@link scanDelimiterRun}. */
 export interface DelimiterRun {
+  /** Number of consecutive delimiter characters in the run. */
   count: number;
+  /** Whether this run can open emphasis/strong per spec §6.2 flanking rules. */
   canOpen: boolean;
+  /** Whether this run can close emphasis/strong per spec §6.2 flanking rules. */
   canClose: boolean;
 }
 
-/** Shared result — mutated and returned. Caller must read immediately. */
+/**
+ * Shared result — mutated and returned to avoid per-call allocation.
+ * Module-level because emphasis scanning is called for every `*`/`_`/`~`
+ * in the source. Caller must read immediately before the next scan call.
+ */
 const RESULT: DelimiterRun = { count: 0, canOpen: false, canClose: false };
 
 /**

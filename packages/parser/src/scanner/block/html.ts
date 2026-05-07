@@ -36,20 +36,31 @@ import {
 } from "../constants";
 import { isAlpha, skipSpaces } from "../utils";
 
-/** Is char alphanumeric or dash (valid in tag names after first char). */
+/**
+ * Check if a charCode is valid in an HTML tag name after the first character.
+ *
+ * @param code - Character code to test
+ * @returns True if alphanumeric or dash
+ */
 function isTagChar(code: number): boolean {
   return isAlpha(code) || (code >= CC_0 && code <= CC_9) || code === CC_DASH;
 }
 
+/** Result of a tag name scan — shared singleton to avoid allocation. */
+interface TagScanResult {
+  name: string;
+  end: number;
+}
+
 /** Shared result for scanTagName — avoids allocation per call. */
-const TAG_RESULT = { name: "", end: 0 };
+const TAG_RESULT: TagScanResult = { name: "", end: 0 };
 
 /**
  * Extract a tag name starting at `pos`, returning lowercase name and end offset.
  *
  * Returns shared result or null. Caller must read immediately.
  */
-function scanTagName(src: string, pos: number, end: number): { name: string; end: number } | null {
+function scanTagName(src: string, pos: number, end: number): TagScanResult | null {
   if (pos >= end || !isAlpha(src.charCodeAt(pos))) return null;
 
   let i = pos + 1;
@@ -190,7 +201,15 @@ export function matchHtmlBlockClose(
   }
 }
 
-/** Scan for a single character in a line. */
+/**
+ * Scan for a single character in a line.
+ *
+ * @param src - Source string
+ * @param pos - Start position
+ * @param lineEnd - End of line boundary
+ * @param ch - Character code to find
+ * @returns True if the character was found within the line
+ */
 function scanForChar(src: string, pos: number, lineEnd: number, ch: number): boolean {
   for (let i = pos; i < lineEnd; i++) {
     if (src.charCodeAt(i) === ch) return true;
@@ -198,7 +217,16 @@ function scanForChar(src: string, pos: number, lineEnd: number, ch: number): boo
   return false;
 }
 
-/** Scan for two consecutive characters — no array allocation. */
+/**
+ * Scan for two consecutive characters in a line.
+ *
+ * @param src - Source string
+ * @param pos - Start position
+ * @param lineEnd - End of line boundary
+ * @param a - First character code
+ * @param b - Second character code
+ * @returns True if the two-character sequence was found
+ */
 function scanFor2(src: string, pos: number, lineEnd: number, a: number, b: number): boolean {
   const limit = lineEnd - 1;
   for (let i = pos; i < limit; i++) {
@@ -207,7 +235,17 @@ function scanFor2(src: string, pos: number, lineEnd: number, a: number, b: numbe
   return false;
 }
 
-/** Scan for three consecutive characters — no array allocation. */
+/**
+ * Scan for three consecutive characters in a line.
+ *
+ * @param src - Source string
+ * @param pos - Start position
+ * @param lineEnd - End of line boundary
+ * @param a - First character code
+ * @param b - Second character code
+ * @param c - Third character code
+ * @returns True if the three-character sequence was found
+ */
 function scanFor3(
   src: string,
   pos: number,
@@ -224,7 +262,15 @@ function scanFor3(
   return false;
 }
 
-/** Scan for a type-1 close tag (`</pre>`, `</script>`, etc.) in a line. */
+/**
+ * Scan for a type-1 close tag (`</pre>`, `</script>`, etc.) in a line.
+ *
+ * @param src - Source string
+ * @param pos - Start position
+ * @param lineEnd - End of line boundary
+ * @param tags - Set of valid close tag names
+ * @returns True if a matching close tag was found
+ */
 function scanForCloseTag(
   src: string,
   pos: number,
@@ -248,7 +294,16 @@ function scanForCloseTag(
   return false;
 }
 
-/** Check if text after a tag name forms a valid open tag with attributes. */
+/**
+ * Check if text after a tag name forms a valid open tag with attributes.
+ *
+ * Validates attribute name/value pairs per spec §6.6 open tag grammar.
+ *
+ * @param src - Source string
+ * @param pos - Position after the tag name
+ * @param end - End boundary
+ * @returns True if the remaining text forms a valid open tag
+ */
 function isValidOpenTag(src: string, pos: number, end: number): boolean {
   let i = pos;
 
@@ -293,6 +348,12 @@ function isValidOpenTag(src: string, pos: number, end: number): boolean {
   return false;
 }
 
+/**
+ * Check if a charCode is valid in an HTML attribute name.
+ *
+ * @param code - Character code to test
+ * @returns True if valid in attribute name position
+ */
 function isAttrNameChar(code: number): boolean {
   return (
     isAlpha(code) ||
@@ -304,6 +365,12 @@ function isAttrNameChar(code: number): boolean {
   );
 }
 
+/**
+ * Check if a charCode terminates an unquoted attribute value.
+ *
+ * @param code - Character code to test
+ * @returns True if the character ends an unquoted value
+ */
 function isUnquotedStop(code: number): boolean {
   return (
     code === CC_SPACE ||

@@ -1,0 +1,39 @@
+# Code ownership — auto-routes PR reviewers.
+#
+# Order matters: later patterns override earlier ones.
+# See https://docs.github.com/articles/about-code-owners for syntax.
+
+# Global fallback — repo owner reviews anything not claimed below.
+*                                   @KarthikMAM
+
+# Parser is the performance-critical core. Design doc in
+# .kiro/steering/parser-design.md must stay in sync with code changes.
+/packages/parser/                   @KarthikMAM
+/.kiro/steering/parser-design.md    @KarthikMAM
+/.kiro/steering/parser-conventions.md @KarthikMAM
+
+# Renderers
+/packages/html/                     @KarthikMAM
+/packages/react/                    @KarthikMAM
+/packages/react-native/             @KarthikMAM
+
+# Plugins + shared tokens
+/packages/plugins/                  @KarthikMAM
+/packages/tokens/                   @KarthikMAM
+
+# Infra (config/bench/spec/e2e) + apps
+/packages/config/                   @KarthikMAM
+/packages/bench/                    @KarthikMAM
+/packages/spec/                     @KarthikMAM
+/packages/e2e/                      @KarthikMAM
+/apps/                              @KarthikMAM
+
+# Governance + CI — require owner review for any change.
+/.github/                           @KarthikMAM
+/biome.json                         @KarthikMAM
+/turbo.json                         @KarthikMAM
+/scripts/                           @KarthikMAM
+/CODE_OF_CONDUCT.md                 @KarthikMAM
+/CONTRIBUTING.md                    @KarthikMAM
+/SECURITY.md                        @KarthikMAM
+/STYLE.md                           @KarthikMAM

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Pre-push hook — run the CI gate locally so broken pushes never leave
+# the machine. Pre-commit already handled lint-staged + banned-names +
+# typecheck; this adds build + full test suite.
+#
+# Skip with --no-verify only in an emergency. Don't normalise that.
+
+set -euo pipefail
+IFS=$'\n\t'
+
+echo "pre-push: lint"
+npm run lint
+
+echo "pre-push: banned-names"
+./scripts/check-banned.sh
+
+echo "pre-push: typecheck"
+npx turbo run typecheck --cache-dir=.turbo
+
+echo "pre-push: build"
+npx turbo run build --cache-dir=.turbo
+
+echo "pre-push: test"
+npx turbo run test --cache-dir=.turbo
+
+echo "pre-push: OK"

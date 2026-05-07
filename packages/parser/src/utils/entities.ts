@@ -31,8 +31,14 @@ import {
  */
 const MAX_ENTITY_NAME_LEN = 31;
 
+/** Result of an entity scan — content string and end offset. */
+interface EntityScanResult {
+  content: string;
+  end: number;
+}
+
 /** Shared result for named entity scan. */
-const NAMED_RESULT = { content: "", end: 0 };
+const NAMED_RESULT: EntityScanResult = { content: "", end: 0 };
 
 /**
  * Scan a named entity starting after `&`.
@@ -40,13 +46,12 @@ const NAMED_RESULT = { content: "", end: 0 };
  * Validates the syntax (`&` + alphanumeric name + `;`) but emits the raw
  * entity text including `&` and `;` as-is. Resolution is left to the renderer.
  *
+ * @param src - Source string to scan
+ * @param pos - Position after the `&` character
+ * @param end - End boundary for scanning
  * @returns Shared result or null. Caller must read immediately.
  */
-export function scanNamedEntity(
-  src: string,
-  pos: number,
-  end: number,
-): { content: string; end: number } | null {
+export function scanNamedEntity(src: string, pos: number, end: number): EntityScanResult | null {
   if (pos >= end) return null;
 
   const firstChar = src.charCodeAt(pos);
@@ -59,8 +64,6 @@ export function scanNamedEntity(
     const code = src.charCodeAt(i);
 
     if (code === CC_SEMI) {
-      if (i === pos) return null;
-
       NAMED_RESULT.content = src.slice(pos, i);
       NAMED_RESULT.end = i + 1;
       return NAMED_RESULT;
@@ -74,7 +77,7 @@ export function scanNamedEntity(
 }
 
 /** Shared result for numeric entity scan. */
-const NUMERIC_RESULT = { content: "", end: 0 };
+const NUMERIC_RESULT: EntityScanResult = { content: "", end: 0 };
 
 /**
  * Scan a numeric entity starting after `&#`.
@@ -83,13 +86,12 @@ const NUMERIC_RESULT = { content: "", end: 0 };
  * Numeric entities ARE decoded to their Unicode character since the
  * code point is unambiguous and doesn't require a lookup table.
  *
+ * @param src - Source string to scan
+ * @param pos - Position after the `#` character
+ * @param end - End boundary for scanning
  * @returns Shared result or null. Caller must read immediately.
  */
-export function scanNumericEntity(
-  src: string,
-  pos: number,
-  end: number,
-): { content: string; end: number } | null {
+export function scanNumericEntity(src: string, pos: number, end: number): EntityScanResult | null {
   if (pos >= end) return null;
 
   let i = pos;
@@ -143,6 +145,9 @@ export function scanNumericEntity(
 
 /**
  * Check if a charCode is ASCII alphanumeric (a-z, A-Z, 0-9).
+ *
+ * @param code - Character code to classify
+ * @returns True if the code is an ASCII letter or digit
  */
 function isAlphaNum(code: number): boolean {
   return (

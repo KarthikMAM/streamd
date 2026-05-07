@@ -53,9 +53,11 @@ export function nextLine(src: string, lineEnd: number): number {
   return lineEnd + 1;
 }
 
-/** Shared indent result — mutated in place. */
+/** Shared indent result — mutated in place by {@link countIndent}. */
 export interface IndentOut {
+  /** Computed indent in columns (tabs expanded to 4-column stops). */
   indent: number;
+  /** Position of first non-whitespace character on the line. */
   pos: number;
 }
 

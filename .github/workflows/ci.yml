@@ -25,14 +25,212 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint (biome — steering rules)
+        run: npm run lint
+
+      - name: Banned names + directives
+        run: ./scripts/check-banned.sh
+
       - name: Build
         run: npm run build
-
-      - name: Lint
-        run: npm run lint
 
       - name: Typecheck
         run: npm run typecheck
 
       - name: Test
         run: npm run test
+
+      - name: Bundle size budgets
+        run: npm run size
+
+  coverage:
+    name: Coverage
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: packages/*/coverage
+          retention-days: 7
+
+  publish-check:
+    name: Publish-readiness (publint + attw)
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: publint + arethetypeswrong
+        run: npm run check:publish
+
+  spec-regression:
+    name: Spec compliance baseline
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Spec regression guard
+        run: npm run check:spec
+
+  links:
+    name: Markdown link check
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Relative-link check
+        run: npm run check:links
+
+  security:
+    name: Security audits
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit (moderate+, production only)
+        # Audit only production dependency trees — the surface that actually
+        # ships to npm consumers. Dev dependencies (Biome, Turbo, Vitest,
+        # TypeDoc, Docusaurus) and their transitive deps are build-time tools
+        # whose vulnerabilities never reach end users. Root-level `overrides`
+        # in package.json pin any transitive deps that slip through.
+        run: npm audit --audit-level=moderate --omit=dev
+
+      - name: OSV scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v1.9.2
+        with:
+          scan-args: |-
+            --lockfile=package-lock.json
+        continue-on-error: true
+
+      - name: License compatibility
+        run: npm run check:licenses
+
+      - name: Dead-export / dead-dep scan
+        run: npm run check:deadcode
+
+  perf-regression:
+    name: Performance regression gate (warn-only)
+    timeout-minutes: 25
+    runs-on: ubuntu-latest
+    needs: build
+    # Shared GitHub runners are noisy — start as a warning-only gate.
+    # Promotion plan (Path B per task 21):
+    #   1. Keep PERF_REGRESSION_WARN_ONLY=1 until a CI runner with pinned
+    #      CPU frequency / isolated cores is adopted, OR until we see
+    #      two consecutive weeks of clean signal from this job.
+    #   2. `--retry-on-false-positive` re-runs the capture once when any
+    #      record regresses; the combined median usually absorbs spurious
+    #      CI blips without hiding real regressions.
+    #   3. Per-record tolerances are configured in
+    #      packages/bench/baseline.json under `perRecordTolerance` — use
+    #      this to widen inherently noisier records (React SSR, streaming
+    #      per-chunk latency) rather than loosening the global threshold.
+    #   4. Drop PERF_REGRESSION_WARN_ONLY once (1)+(2) are satisfied.
+    env:
+      PERF_REGRESSION_WARN_ONLY: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build parser + renderers + plugins
+        run: npx turbo run build --filter=@streamd/parser --filter=@streamd/html --filter=@streamd/react --filter=@streamd/plugins --filter=@streamd/tokens
+
+      - name: Perf regression gate
+        run: npm run check:perf -- --runs=3 --threshold=15 --retry-on-false-positive
+
+      - name: Upload fresh capture for diagnosis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-capture
+          path: /tmp/current.json
+          if-no-files-found: ignore
+          retention-days: 14

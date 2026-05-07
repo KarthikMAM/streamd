@@ -1,0 +1,67 @@
+{
+  "name": "@streamd/cli",
+  "version": "0.0.1",
+  "description": "CLI for the streamd markdown toolchain — stream stdin through parse+render+plugins to stdout.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
+    }
+  },
+  "bin": {
+    "streamd": "./dist/bin/streamd.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@streamd/html": "*",
+    "@streamd/parser": "*",
+    "@streamd/plugins": "*",
+    "@streamd/tokens": "*"
+  },
+  "devDependencies": {
+    "@streamd/config": "*",
+    "@vitest/coverage-v8": "^3.2.0",
+    "tsdown": "~0.21.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "keywords": [
+    "markdown",
+    "cli",
+    "streaming",
+    "streamd"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KarthikMAM/streamd.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/KarthikMAM/streamd/tree/main/packages/cli",
+  "bugs": {
+    "url": "https://github.com/KarthikMAM/streamd/issues"
+  },
+  "author": "KarthikMAM",
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -1,0 +1,49 @@
+name: Documentation issue
+description: Report a problem with the docs, README, or inline JSDoc
+title: "[Docs] "
+labels:
+  - docs
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Spotted a typo, stale example, missing explanation, or broken
+        link? Open this issue. For ambiguous rules or design decisions
+        that need discussion before doc changes, prefer
+        [Discussions](https://github.com/KarthikMAM/streamd/discussions).
+
+  - type: input
+    id: location
+    attributes:
+      label: Page URL or file path
+      description: |
+        Full URL if it's a rendered doc, or repo-relative path if it's a
+        source file (e.g. `packages/parser/src/parser.ts`,
+        `packages/react/README.md`).
+      placeholder: "packages/parser/README.md"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's wrong?
+      description: Quote or screenshot the problematic content and explain why it's wrong or misleading.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix
+      description: |
+        Proposed wording, corrected example, or link replacement.
+        Optional — skip if you're only flagging the problem.
+      render: markdown
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Related issues, discussions, or pages that share the same problem.

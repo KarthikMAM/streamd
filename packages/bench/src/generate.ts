@@ -4,7 +4,16 @@
  * @module bench/generate
  */
 
-/** Generate mixed markdown content of approximately `sizeKb` kilobytes. */
+/**
+ * Generate mixed markdown content of approximately `sizeKb` kilobytes.
+ *
+ * Produces a representative mix of headings, paragraphs, blockquotes,
+ * lists, fenced code, thematic breaks, and plain text.
+ *
+ * @param sizeKb - Target size in kilobytes. The output is truncated to
+ *   exactly `sizeKb * 1024` bytes.
+ * @returns Generated markdown string.
+ */
 export function generateMixed(sizeKb: number): string {
   const parts: Array<string> = [];
   let currentSize = 0;
@@ -25,27 +34,48 @@ export function generateMixed(sizeKb: number): string {
   return parts.join("").slice(0, sizeKb * 1024);
 }
 
-/** Generate paragraph-heavy content. */
+/**
+ * Generate paragraph-heavy content of approximately `sizeKb` kilobytes.
+ *
+ * Produces paragraphs with inline formatting (bold, italic, code) to
+ * exercise the inline re-parse path.
+ *
+ * @param sizeKb - Target size in kilobytes. The output is truncated to
+ *   exactly `sizeKb * 1024` bytes.
+ * @returns Generated markdown string.
+ */
 export function generateParagraphs(sizeKb: number): string {
   const parts: Array<string> = [];
   let currentSize = 0;
+
   while (currentSize < sizeKb * 1024) {
     parts.push("This is a paragraph with **bold**, *italic*, and `code` inline formatting.\n");
     parts.push("Another line continuing the same paragraph with more text content.\n\n");
     currentSize = parts.join("").length;
   }
+
   return parts.join("").slice(0, sizeKb * 1024);
 }
 
-/** Generate code-heavy content. */
+/**
+ * Generate code-heavy content of approximately `sizeKb` kilobytes.
+ *
+ * Produces fenced code blocks to exercise the fenced-code fast path.
+ *
+ * @param sizeKb - Target size in kilobytes. The output is truncated to
+ *   exactly `sizeKb * 1024` bytes.
+ * @returns Generated markdown string.
+ */
 export function generateCode(sizeKb: number): string {
   const parts: Array<string> = [];
   let currentSize = 0;
+
   while (currentSize < sizeKb * 1024) {
     parts.push("```js\n");
     for (let i = 0; i < 10; i++) parts.push(`const x${i} = ${i};\n`);
     parts.push("```\n\n");
     currentSize = parts.join("").length;
   }
+
   return parts.join("").slice(0, sizeKb * 1024);
 }
