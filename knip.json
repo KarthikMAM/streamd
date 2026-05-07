@@ -1,0 +1,75 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "workspaces": {
+    "packages/parser": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"],
+      "ignore": ["src/**/*.test.ts", "src/**/*.bench.ts", "src/benchmarks/**"]
+    },
+    "packages/tokens": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"],
+      "ignore": ["src/**/*.test.ts"]
+    },
+    "packages/html": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts", "src/**/*.tsx"],
+      "ignore": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+    },
+    "packages/plugins": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"],
+      "ignore": ["src/**/*.test.ts"]
+    },
+    "packages/react": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts", "src/**/*.tsx"],
+      "ignore": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+    },
+    "packages/react-native": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts", "src/**/*.tsx"],
+      "ignore": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+    }
+  },
+  "ignoreExportsUsedInFile": true,
+  "ignoreBinaries": ["tsdown"],
+  "ignore": [
+    "**/coverage/**",
+    "**/dist/**",
+    "apps/docs/**",
+    "apps/html-demo/**",
+    "apps/react-demo/src/types.d.ts",
+    "apps/react-native-demo/src/types.d.ts",
+    "**/tsdown.config.ts",
+    "packages/react-native/src/__tests__/**",
+    "packages/bench/src/browser-parsers.ts",
+    "packages/spec/scripts/**",
+    "scripts/function-size-audit.mjs",
+    "scripts/jsdoc-audit.mjs",
+    "scripts/prepend-module-header.mjs"
+  ],
+  "ignoreDependencies": [
+    "@biomejs/biome",
+    "@changesets/cli",
+    "@commitlint/cli",
+    "@commitlint/config-conventional",
+    "husky",
+    "lint-staged",
+    "publint",
+    "@arethetypeswrong/cli",
+    "size-limit",
+    "@size-limit/preset-small-lib",
+    "knip",
+    "@vitest/coverage-v8",
+    "@docusaurus/types",
+    "@docusaurus/plugin-content-docs",
+    "@types/katex",
+    "react-native",
+    "react-native-web",
+    "clsx",
+    "prism-react-renderer",
+    "madge",
+    "typedoc"
+  ]
+}

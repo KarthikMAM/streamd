@@ -1,1 +1,24 @@
+#!/usr/bin/env bash
+# Pre-commit hook — enforce steering rules before the commit lands.
+#
+# Runs:
+#   1. lint-staged — biome check --write on staged files
+#   2. ./scripts/check-banned.sh — directives + banned names + TODO gate
+#   3. turbo run typecheck — catch type regressions
+#
+# Any failure blocks the commit. Use `git commit --no-verify` only in a
+# true emergency.
+
+set -euo pipefail
+IFS=$'\n\t'
+
+echo "pre-commit: lint-staged"
 npx lint-staged
+
+echo "pre-commit: banned-names scan"
+./scripts/check-banned.sh
+
+echo "pre-commit: typecheck"
+npx turbo run typecheck --cache-dir=.turbo
+
+echo "pre-commit: OK"

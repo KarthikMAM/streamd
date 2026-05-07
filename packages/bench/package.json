@@ -8,16 +8,26 @@
     "bench": "turbo run build --filter=@streamd/parser && tsx src/index.ts",
     "bench:baseline": "turbo run build --filter=@streamd/parser && tsx src/baseline.ts",
     "bench:profile": "turbo run build --filter=@streamd/parser && tsx src/profile-streaming.ts",
+    "bench:renderers": "turbo run build --filter=@streamd/parser --filter=@streamd/html --filter=@streamd/react --filter=@streamd/react-native --filter=@streamd/plugins --filter=@streamd/tokens && tsx src/renderers.ts",
+    "bench:plugins": "turbo run build --filter=@streamd/parser --filter=@streamd/html --filter=@streamd/plugins --filter=@streamd/tokens && tsx src/plugins.ts",
     "build": "tsdown",
     "bench:browser": "tsdown && node serve.js",
-    "serve": "node serve.js"
+    "serve": "node serve.js",
+    "bench:capture": "turbo run build --filter=@streamd/parser && tsx src/capture.ts"
   },
   "devDependencies": {
     "@streamd/config": "*",
+    "@streamd/html": "*",
     "@streamd/parser": "*",
-    "commonmark": "^0.31.2",
+    "@streamd/plugins": "*",
+    "@streamd/react": "*",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "commonmark": "~0.31.2",
     "markdown-it": "^14.1.1",
     "marked": "^17.0.4",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
     "tsx": "^4.19.0"
   }
 }

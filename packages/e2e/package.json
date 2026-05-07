@@ -1,0 +1,31 @@
+{
+  "name": "@streamd/e2e",
+  "version": "0.0.1",
+  "private": true,
+  "description": "End-to-end integration tests across @streamd packages",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@streamd/html": "*",
+    "@streamd/parser": "*",
+    "@streamd/plugins": "*",
+    "@streamd/react": "*",
+    "@streamd/react-native": "*",
+    "@streamd/tokens": "*"
+  },
+  "devDependencies": {
+    "@streamd/config": "*",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "html-minifier-terser": "^7.2.0",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0",
+    "@vitest/coverage-v8": "^3.2.0"
+  },
+  "license": "MIT"
+}

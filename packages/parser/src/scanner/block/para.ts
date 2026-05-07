@@ -133,7 +133,14 @@ export function scanParagraph(
 
 /**
  * After detecting a table separator, scan remaining data rows.
- * Returns new source position.
+ *
+ * @param src - Source string
+ * @param blocks - Block array to push the table block into
+ * @param bs - Block start offset
+ * @param headerStart - Start of the header row content
+ * @param separatorEnd - End of the separator line
+ * @param align - Column alignment array from the separator
+ * @returns New source position past the table
  */
 function scanTableBody(
   src: string,
@@ -163,7 +170,14 @@ function scanTableBody(
   return pos;
 }
 
-/** Check if a line is a setext heading underline (= or -). */
+/**
+ * Check if a line is a setext heading underline (= or -).
+ *
+ * @param src - Source string
+ * @param fns - First non-space position on the line
+ * @param lineEnd - End of line boundary
+ * @returns Heading level (1 for `=`, 2 for `-`) or 0 if not a setext underline
+ */
 function checkSetextUnderline(src: string, fns: number, lineEnd: number): number {
   if (fns >= lineEnd) return 0;
   const ch = src.charCodeAt(fns);

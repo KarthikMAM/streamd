@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-05-07T13:55:25.643Z",
+  "node": "v22.22.2",
+  "platform": "linux-x64",
+  "runs": 3,
+  "records": [
+    {
+      "id": "static.mixed-1kb",
+      "label": "Mixed 1 KB",
+      "kind": "static",
+      "inputBytes": 1024,
+      "medianMs": 0.023605999999972482,
+      "p95Ms": 0.03707799999995132,
+      "throughputMbPerS": 41.3692493434355,
+      "heapUsedBytes": 3886120
+    },
+    {
+      "id": "static.mixed-10kb",
+      "label": "Mixed 10 KB",
+      "kind": "static",
+      "inputBytes": 10240,
+      "medianMs": 0.20937500000013642,
+      "p95Ms": 0.2341030000000046,
+      "throughputMbPerS": 46.64179104474573,
+      "heapUsedBytes": 0
+    },
+    {
+      "id": "static.mixed-50kb",
+      "label": "Mixed 50 KB",
+      "kind": "static",
+      "inputBytes": 51200,
+      "medianMs": 1.0551779999998416,
+      "p95Ms": 1.6736379999999826,
+      "throughputMbPerS": 46.274775440738274,
+      "heapUsedBytes": 159232
+    },
+    {
+      "id": "static.paragraphs-50kb",
+      "label": "Paragraphs 50 KB",
+      "kind": "static",
+      "inputBytes": 51200,
+      "medianMs": 0.5366659999999683,
+      "p95Ms": 0.5607380000001285,
+      "throughputMbPerS": 90.98419687478409,
+      "heapUsedBytes": 10930448
+    },
+    {
+      "id": "static.code-50kb",
+      "label": "Code blocks 50 KB",
+      "kind": "static",
+      "inputBytes": 51200,
+      "medianMs": 0.1748419999998987,
+      "p95Ms": 0.18554999999969368,
+      "throughputMbPerS": 279.26999805554897,
+      "heapUsedBytes": 0
+    },
+    {
+      "id": "static.pathological-star",
+      "label": "Pathological * x10000",
+      "kind": "static",
+      "inputBytes": 10000,
+      "medianMs": 0.11092099999996208,
+      "p95Ms": 0.12151300000004994,
+      "throughputMbPerS": 85.97779648638003,
+      "heapUsedBytes": 3556576
+    },
+    {
+      "id": "static.pathological-blockquote",
+      "label": "Pathological > x200",
+      "kind": "static",
+      "inputBytes": 404,
+      "medianMs": 0.45174500000030093,
+      "p95Ms": 0.5001620000002731,
+      "throughputMbPerS": 0.8528803281228754,
+      "heapUsedBytes": 0
+    },
+    {
+      "id": "streaming.mixed-50kb.chunk-50",
+      "label": "Mixed 50 KB / 50B chunks",
+      "kind": "streaming",
+      "inputBytes": 51200,
+      "medianMs": 11.662999000000127,
+      "p95Ms": 11.662999000000127,
+      "throughputMbPerS": 4.18658399953558,
+      "perChunkMedianMs": 0.00630399999954534,
+      "numChunks": 1024,
+      "heapUsedBytes": 38175352
+    },
+    {
+      "id": "streaming.mixed-50kb.chunk-200",
+      "label": "Mixed 50 KB / 200B chunks",
+      "kind": "streaming",
+      "inputBytes": 51200,
+      "medianMs": 3.3701039999996283,
+      "p95Ms": 3.3701039999996283,
+      "throughputMbPerS": 14.488610737237007,
+      "perChunkMedianMs": 0.009658999999373918,
+      "numChunks": 256,
+      "heapUsedBytes": 13359504
+    },
+    {
+      "id": "streaming.mixed-50kb.chunk-1000",
+      "label": "Mixed 50 KB / 1KB chunks",
+      "kind": "streaming",
+      "inputBytes": 51200,
+      "medianMs": 1.4789200000004712,
+      "p95Ms": 1.4789200000004712,
+      "throughputMbPerS": 33.016069158564655,
+      "perChunkMedianMs": 0.027743999999984226,
+      "numChunks": 52,
+      "heapUsedBytes": 4275664
+    },
+    {
+      "id": "html.static.mixed-1kb",
+      "label": "HTML render 1 KB",
+      "kind": "html-static",
+      "inputBytes": 1024,
+      "medianMs": 0.01647999999931926,
+      "p95Ms": 0.01950100000067323,
+      "p99Ms": 0.02392000000054395,
+      "throughputMbPerS": 59.257433254874925,
+      "heapUsedBytes": 0
+    },
+    {
+      "id": "html.static.mixed-10kb",
+      "label": "HTML render 10 KB",
+      "kind": "html-static",
+      "inputBytes": 10240,
+      "medianMs": 0.11952699999983452,
+      "p95Ms": 0.135747999999694,
+      "p99Ms": 6.9764100000002145,
+      "throughputMbPerS": 81.70225137427963,
+      "heapUsedBytes": 0
+    },
+    {
+      "id": "html.static.mixed-50kb",
+      "label": "HTML render 50 KB",
+      "kind": "html-static",
+      "inputBytes": 51200,
+      "medianMs": 0.45034599999962666,
+      "p95Ms": 0.7003029999996215,
+      "p99Ms": 12.519250000000284,
+      "throughputMbPerS": 108.42357875953262,
+      "heapUsedBytes": 0
+    },
+    {
+      "id": "html.static.mixed-500kb",
+      "label": "HTML render 500 KB",
+      "kind": "html-static",
+      "inputBytes": 512000,
+      "medianMs": 6.677819000000454,
+      "p95Ms": 8.795248000000356,
+      "p99Ms": 50.524513999999726,
+      "throughputMbPerS": 73.11986892726006,
+      "heapUsedBytes": 21007760
+    },
+    {
+      "id": "html.streaming.mixed-50kb.chunk-50",
+      "label": "HTML streaming 50 KB / 50B chunks",
+      "kind": "html-streaming",
+      "inputBytes": 51200,
+      "medianMs": 247.73770100000002,
+      "p95Ms": 346.0576950000004,
+      "p99Ms": 470.3744539999989,
+      "throughputMbPerS": 0.19709606088578338,
+      "perChunkMedianMs": 0.24526799999966897,
+      "perChunkP99Ms": 0.7043080000003101,
+      "numChunks": 1024,
+      "heapUsedBytes": 14052464
+    },
+    {
+      "id": "react.static.mixed-1kb",
+      "label": "React SSR 1 KB",
+      "kind": "react-static",
+      "inputBytes": 1024,
+      "medianMs": 0.46525499999916065,
+      "p95Ms": 2.059110000000146,
+      "p99Ms": 2.2703099999998813,
+      "throughputMbPerS": 2.0989833532186903,
+      "heapUsedBytes": 0
+    },
+    {
+      "id": "react.static.mixed-10kb",
+      "label": "React SSR 10 KB",
+      "kind": "react-static",
+      "inputBytes": 10240,
+      "medianMs": 4.086277000000337,
+      "p95Ms": 5.1094689999990806,
+      "p99Ms": 5.32161399999859,
+      "throughputMbPerS": 2.38985878832962,
+      "heapUsedBytes": 23666256
+    },
+    {
+      "id": "react.static.mixed-50kb",
+      "label": "React SSR 50 KB",
+      "kind": "react-static",
+      "inputBytes": 51200,
+      "medianMs": 21.45234900000105,
+      "p95Ms": 60.45096000000012,
+      "p99Ms": 97.36011399999916,
+      "throughputMbPerS": 2.2761202048315368,
+      "heapUsedBytes": 0
+    },
+    {
+      "id": "react.static.mixed-500kb",
+      "label": "React SSR 500 KB",
+      "kind": "react-static",
+      "inputBytes": 512000,
+      "medianMs": 263.43234200000006,
+      "p95Ms": 407.05917599999884,
+      "p99Ms": 942.6835580000006,
+      "throughputMbPerS": 1.8535356983615927,
+      "heapUsedBytes": 59526456
+    },
+    {
+      "id": "react.streaming.mixed-50kb.chunk-50",
+      "label": "React SSR streaming 50 KB / 50B chunks",
+      "kind": "react-streaming",
+      "inputBytes": 51200,
+      "medianMs": 16737.008973999997,
+      "p95Ms": 26484.106411999994,
+      "p99Ms": 29707.424815000006,
+      "throughputMbPerS": 0.0029173746083216985,
+      "perChunkMedianMs": 12.209218000003602,
+      "perChunkP99Ms": 104.41916399999172,
+      "numChunks": 1024,
+      "heapUsedBytes": 29457192
+    },
+    {
+      "id": "plugins.overhead.50kb",
+      "label": "Plugins: anchors + link-attrs + sanitize on 50 KB tokens",
+      "kind": "plugin-overhead",
+      "inputBytes": 51200,
+      "medianMs": 0.8942760000063572,
+      "p95Ms": 1.2793019999953685,
+      "p99Ms": 17.394950999994762,
+      "throughputMbPerS": 54.60073288297225,
+      "heapUsedBytes": 2483552
+    }
+  ]
+}

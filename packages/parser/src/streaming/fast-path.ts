@@ -31,7 +31,11 @@ import {
 } from "../scanner/constants";
 import { selectDispatch } from "../scanner/inline/dispatch";
 
-/** Reusable indent result for continuation checks. */
+/**
+ * Reusable indent result for continuation checks — module-level to avoid
+ * per-call allocation. Mutated by `countIndent`; safe because this file
+ * has its own instance.
+ */
 const IND = { indent: 0, pos: 0 };
 
 /**

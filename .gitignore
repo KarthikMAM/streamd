@@ -7,3 +7,12 @@ build.log
 apps/docs/build
 coverage/
 vendor/
+
+# Scratchpad — Ralph autonomous-loop task prompts and helper scripts
+.ralph-*
+
+# Scratchpad — dated review / audit reports authored by agents
+review-streamd-*.md
+
+# Machine-local IDE settings (Kiro LSP config is workstation-specific)
+.kiro/settings/

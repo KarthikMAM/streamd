@@ -1,0 +1,118 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+title: "[Bug] "
+labels:
+  - bug
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill out every
+        required section — reports missing reproduction steps or
+        environment details are hard to act on and will usually be
+        closed pending more information.
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: Affected package
+      description: Which package is the bug in?
+      options:
+        - "@streamd/parser"
+        - "@streamd/tokens"
+        - "@streamd/html"
+        - "@streamd/react"
+        - "@streamd/react-native"
+        - "@streamd/plugins"
+        - "@streamd/plugin-shiki"
+        - "@streamd/plugin-katex"
+        - "@streamd/cli"
+        - "other / unsure"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: Value of the `version` field in the package's `package.json`, or the installed version (`npm ls @streamd/<package>`).
+      placeholder: "0.0.1"
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      description: Output of `node --version`. Use `n/a` if the bug only reproduces in a browser or React Native host and doesn't touch Node.
+      placeholder: "v22.11.0"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: OS name and version (`uname -a`, or "macOS 15.2", "Windows 11", "Ubuntu 24.04", etc.).
+      placeholder: "macOS 15.2 (arm64)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What is broken? Describe the problem in prose before the reproduction steps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: |
+        Minimal markdown input and code that triggers the bug. The
+        smaller and more self-contained, the faster this can be fixed.
+      render: ts
+      placeholder: |
+        import { parse } from "@streamd/parser";
+        import { renderHtml } from "@streamd/html";
+
+        const out = renderHtml(parse("# …").tokens);
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps from a clean install to the observed failure.
+      placeholder: |
+        1. `npm install @streamd/parser @streamd/html`
+        2. Run the code under "Minimal reproduction"
+        3. Observe …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected output
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual output
+      description: What actually happened? Include stack traces / error messages verbatim.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Related issues, workarounds tried, anything else that might help diagnose the issue.

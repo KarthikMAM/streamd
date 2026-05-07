@@ -16,10 +16,15 @@ import type { InlineToken, Token } from "../types/tokens";
 
 /** Internal streaming state persisted between parse calls. */
 export interface StreamState {
+  /** Previous source length — diff against current to detect new content. */
   prevLen: number;
+  /** Frozen parse options for consistent assembly across calls. */
   opts: AssembleOpts;
+  /** Promoted (finalized) block tokens — grows monotonically. */
   completedTokens: Array<Token>;
+  /** Offset where the active (last) block begins in the source. */
   activeBlockStart: number;
+  /** Accumulated link reference definitions across all completed blocks. */
   refMap: Map<string, LinkReference>;
   /** Kind of the last active block — enables fast paths. */
   activeBlockKind: BlockKindValue;

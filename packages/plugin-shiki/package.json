@@ -1,0 +1,71 @@
+{
+  "name": "@streamd/plugin-shiki",
+  "version": "0.0.1",
+  "description": "Shiki syntax-highlighter adapter for the streamd plugin pipeline",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@streamd/parser": "*",
+    "@streamd/plugins": "*",
+    "@streamd/tokens": "*",
+    "shiki": "^1.0.0"
+  },
+  "devDependencies": {
+    "@streamd/config": "*",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0",
+    "@vitest/coverage-v8": "^3.2.0"
+  },
+  "keywords": [
+    "markdown",
+    "plugin",
+    "shiki",
+    "syntax-highlighting",
+    "streamd"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KarthikMAM/streamd.git",
+    "directory": "packages/plugin-shiki"
+  },
+  "homepage": "https://github.com/KarthikMAM/streamd/tree/main/packages/plugin-shiki",
+  "bugs": {
+    "url": "https://github.com/KarthikMAM/streamd/issues"
+  },
+  "author": "KarthikMAM",
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

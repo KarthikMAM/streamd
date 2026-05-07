@@ -192,7 +192,13 @@ function wrapTokens(
   }
 }
 
-/** Build delimiter text without String.fromCharCode in hot path */
+/**
+ * Build a string of repeated delimiter characters.
+ *
+ * @param char - Character code of the delimiter
+ * @param count - Number of repetitions
+ * @returns String of `count` copies of the delimiter character
+ */
 function delimText(char: number, count: number): string {
   // Common cases: single char
   if (count === 1) return String.fromCharCode(char);

@@ -6,9 +6,8 @@
  *
  * Streaming benchmark: all parsers receive the same accumulated source string
  * on each chunk. @streamd uses incremental state; others re-parse from scratch.
- * This is the fair comparison — same input, different strategies.
  *
- * Usage: npx tsx packages/bench/src/index.ts
+ * Usage: `npx tsx packages/bench/src/index.ts`
  *
  * @module bench/index
  */
@@ -16,234 +15,277 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as streamdParse } from "@streamd/parser";
+import { formatMs, printTable } from "./format";
 import { generateMixed } from "./generate";
 import { bench } from "./runner";
+import type { MeasurementResult, ParserBenchTarget, StaticInput, StreamResult } from "./types";
 
+/** Resolved directory of this module — used to locate fixture files. */
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const sampleMd = readFileSync(resolve(__dirname, "../fixtures/sample.md"), "utf8");
 
-const inputs = [
-  { label: "Synthetic 1 KB", src: generateMixed(1), warmup: 200, iter: 2000 },
-  { label: "Synthetic 50 KB", src: generateMixed(50), warmup: 100, iter: 500 },
-  { label: "Synthetic 500 KB", src: generateMixed(500), warmup: 20, iter: 100 },
+/** Real-world markdown fixture loaded from disk for representative benchmarking. */
+const sampleMarkdown = readFileSync(resolve(__dirname, "../fixtures/sample.md"), "utf8");
+
+/** Static-parse inputs covering synthetic sizes, real-world content, and pathological patterns. */
+const inputs: ReadonlyArray<StaticInput> = [
+  { label: "Synthetic 1 KB", source: generateMixed(1), warmup: 200, iterations: 2000 },
+  { label: "Synthetic 50 KB", source: generateMixed(50), warmup: 100, iterations: 500 },
+  { label: "Synthetic 500 KB", source: generateMixed(500), warmup: 20, iterations: 100 },
   {
-    label: `Real-world ${(sampleMd.length / 1024).toFixed(1)} KB`,
-    src: sampleMd,
+    label: `Real-world ${(sampleMarkdown.length / 1024).toFixed(1)} KB`,
+    source: sampleMarkdown,
     warmup: 200,
-    iter: 2000,
+    iterations: 2000,
   },
-  { label: "Pathological *x10000", src: "*".repeat(10000), warmup: 100, iter: 1000 },
-  { label: "Pathological >x200", src: "> ".repeat(200) + "text", warmup: 100, iter: 1000 },
+  { label: "Pathological *x10000", source: "*".repeat(10000), warmup: 100, iterations: 1000 },
+  { label: "Pathological >x200", source: `${"> ".repeat(200)}text`, warmup: 100, iterations: 1000 },
 ];
 
-function printTable(rows: Array<Array<string>>): void {
-  if (rows.length === 0) return;
-  const cols = rows[0]!.length;
-  const widths: Array<number> = [];
-  for (let c = 0; c < cols; c++) {
-    let max = 0;
-    for (const row of rows) {
-      if (row[c]!.length > max) max = row[c]!.length;
-    }
-    widths.push(max);
-  }
-  for (let r = 0; r < rows.length; r++) {
-    const cells = rows[r]!.map((cell, c) =>
-      c === 0 ? cell.padEnd(widths[c]!) : cell.padStart(widths[c]!),
-    );
-    console.log(`| ${cells.join(" | ")} |`);
-    if (r === 0) console.log(`|${widths.map((w) => "-".repeat(w + 2)).join("|")}|`);
-  }
-}
-
-function fmtMs(ms: number): string {
-  if (ms < 0.001) return (ms * 1_000_000).toFixed(0) + " ns";
-  if (ms < 1) return (ms * 1000).toFixed(1) + " \u00B5s";
-  return ms.toFixed(3) + " ms";
-}
-
-/** Result of a streaming benchmark. */
-interface StreamResult {
-  name: string;
-  numChunks: number;
-  totalMedianMs: number;
-  perChunkMedianMs: number;
-  throughput: number;
-}
-
 /**
- * Benchmark streaming parse — all parsers receive the same accumulated string.
+ * Parse the full accumulated source on each chunk boundary (fair comparison).
  *
- * Simulates LLM streaming: source arrives in chunks of `chunkSize` bytes.
- * On each chunk, the parser receives the full accumulated source so far.
- * @streamd uses state for incremental parsing; others re-parse from scratch.
+ * @param name - Parser name for the result row.
+ * @param parseFn - Streaming parse function receiving accumulated source and state.
+ * @param source - Full source to chunk.
+ * @param chunkSize - Byte length of each chunk.
+ * @param warmup - Number of discarded warmup iterations.
+ * @param iterations - Number of timed iterations.
+ * @returns Streaming benchmark result with median timings and throughput.
  */
 function benchStreamingFair(
   name: string,
   parseFn: (accumulated: string, state: unknown) => unknown,
-  src: string,
+  source: string,
   chunkSize: number,
   warmup: number,
   iterations: number,
 ): StreamResult {
-  // Pre-compute chunk boundaries
-  const boundaries: Array<number> = [];
-  for (let i = chunkSize; i < src.length; i += chunkSize) boundaries.push(i);
-  boundaries.push(src.length);
-  const numChunks = boundaries.length;
+  const boundaries = computeBoundaries(source.length, chunkSize);
 
-  // Warmup
+  runWarmup(source, parseFn, boundaries, warmup);
+  const { chunkTimes, totalTimes } = runMeasured(source, parseFn, boundaries, iterations);
+
+  chunkTimes.sort((a, b) => a - b);
+  totalTimes.sort((a, b) => a - b);
+  const totalMedianMs = totalTimes[Math.floor(totalTimes.length / 2)] ?? 0;
+  const perChunkMedianMs = chunkTimes[Math.floor(chunkTimes.length / 2)] ?? 0;
+  const throughput = source.length / 1024 / 1024 / (totalMedianMs / 1000);
+
+  return { name, numChunks: boundaries.length, totalMedianMs, perChunkMedianMs, throughput };
+}
+
+/**
+ * Pre-compute cumulative byte boundaries for chunking.
+ *
+ * @param srcLength - Total source length in bytes.
+ * @param chunkSize - Byte step between boundaries.
+ * @returns Array of cumulative byte offsets ending with `srcLength`.
+ */
+function computeBoundaries(srcLength: number, chunkSize: number): ReadonlyArray<number> {
+  const boundaries: Array<number> = [];
+  for (let i = chunkSize; i < srcLength; i += chunkSize) boundaries.push(i);
+  boundaries.push(srcLength);
+  return boundaries;
+}
+
+/**
+ * Warm-up without recording timings.
+ *
+ * @param source - Full source string.
+ * @param parseFn - Streaming parse function.
+ * @param boundaries - Cumulative byte boundaries.
+ * @param warmup - Number of warmup passes.
+ */
+function runWarmup(
+  source: string,
+  parseFn: (accumulated: string, state: unknown) => unknown,
+  boundaries: ReadonlyArray<number>,
+  warmup: number,
+): void {
   for (let w = 0; w < warmup; w++) {
     let state: unknown = null;
-    for (let c = 0; c < numChunks; c++) {
-      state = parseFn(src.slice(0, boundaries[c]!), state);
+    for (let c = 0; c < boundaries.length; c++) {
+      state = parseFn(source.slice(0, boundaries[c] ?? source.length), state);
     }
   }
+}
 
-  // Measure
+/**
+ * Measured iterations, returning per-chunk and total timings.
+ *
+ * @param source - Full source string.
+ * @param parseFn - Streaming parse function.
+ * @param boundaries - Cumulative byte boundaries.
+ * @param iterations - Number of timed iterations.
+ * @returns Per-chunk and total timing arrays in milliseconds.
+ */
+function runMeasured(
+  source: string,
+  parseFn: (accumulated: string, state: unknown) => unknown,
+  boundaries: ReadonlyArray<number>,
+  iterations: number,
+): MeasurementResult {
   const chunkTimes: Array<number> = [];
   const totalTimes: Array<number> = [];
 
   for (let iter = 0; iter < iterations; iter++) {
     const totalStart = performance.now();
     let state: unknown = null;
-    for (let c = 0; c < numChunks; c++) {
-      const accumulated = src.slice(0, boundaries[c]!);
-      const t0 = performance.now();
+    for (let c = 0; c < boundaries.length; c++) {
+      const accumulated = source.slice(0, boundaries[c] ?? source.length);
+      const chunkStart = performance.now();
       state = parseFn(accumulated, state);
-      chunkTimes.push(performance.now() - t0);
+      chunkTimes.push(performance.now() - chunkStart);
     }
     totalTimes.push(performance.now() - totalStart);
   }
 
-  chunkTimes.sort((a, b) => a - b);
-  totalTimes.sort((a, b) => a - b);
-
-  const totalMedianMs = totalTimes[Math.floor(totalTimes.length / 2)]!;
-  const perChunkMedianMs = chunkTimes[Math.floor(chunkTimes.length / 2)]!;
-  const throughput = src.length / 1024 / 1024 / (totalMedianMs / 1000);
-
-  return { name, numChunks, totalMedianMs, perChunkMedianMs, throughput };
+  return { chunkTimes, totalTimes };
 }
 
-async function main(): Promise<void> {
+await runBench();
+
+/** Orchestrates the three benchmark sections. */
+async function runBench(): Promise<void> {
   const { marked } = await import("marked");
   const MarkdownIt = (await import("markdown-it")).default;
   const { Parser: CmParser } = await import("commonmark");
   const md = new MarkdownIt();
   const cmParser = new CmParser();
 
-  const allParsers = [
-    { name: "@streamd/parser", fn: (s: string) => streamdParse(s) },
-    { name: "marked", fn: (s: string) => marked.lexer(s) },
-    { name: "markdown-it", fn: (s: string) => md.parse(s, {}) },
-    { name: "commonmark.js", fn: (s: string) => cmParser.parse(s) },
+  const allParsers: ReadonlyArray<ParserBenchTarget> = [
+    { name: "@streamd/parser", fn: (s) => streamdParse(s) },
+    { name: "marked", fn: (s) => marked.lexer(s) },
+    { name: "markdown-it", fn: (s) => md.parse(s, {}) },
+    { name: "commonmark.js", fn: (s) => cmParser.parse(s) },
   ];
 
-  // === Static parse ===
+  printStaticSection(allParsers);
+  printStreamingSection(marked, md, cmParser);
+  printChunkSizeSection();
+}
+
+/**
+ * Print the static-parse comparison.
+ *
+ * @param parsers - Array of parser targets to compare.
+ */
+function printStaticSection(parsers: ReadonlyArray<ParserBenchTarget>): void {
   console.log("=== Static Parse ===\n");
 
-  const staticHeader = ["Input", ...allParsers.map((p) => p.name)];
-  const staticRows: Array<Array<string>> = [staticHeader];
-
-  for (const { label, src, warmup, iter } of inputs) {
-    const cells = [label];
-    for (const parser of allParsers) {
-      const r = bench(parser.name, parser.fn, src, warmup, iter);
-      cells.push(fmtMs(r.median) + " / " + r.throughput.toFixed(0) + " MB/s");
+  const rows: Array<Array<string>> = [["Input", ...parsers.map((p) => p.name)]];
+  for (const input of inputs) {
+    const cells: Array<string> = [input.label];
+    for (const parser of parsers) {
+      const result = bench(parser.name, parser.fn, input.source, input.warmup, input.iterations);
+      cells.push(`${formatMs(result.median)} / ${result.throughput.toFixed(0)} MB/s`);
     }
-    staticRows.push(cells);
+    rows.push(cells);
   }
 
-  printTable(staticRows);
+  printTable(rows);
+}
 
-  // === Streaming ===
+/**
+ * Print the streaming-simulation section.
+ *
+ * @param marked - The marked lexer instance.
+ * @param md - The markdown-it instance.
+ * @param cmParser - The commonmark.js parser instance.
+ */
+function printStreamingSection(
+  marked: typeof import("marked")["marked"],
+  md: InstanceType<typeof import("markdown-it")["default"]>,
+  cmParser: InstanceType<typeof import("commonmark")["Parser"]>,
+): void {
   console.log("\n=== Streaming Simulation (50 KB, 200B chunks) ===\n");
   console.log("All parsers receive the same accumulated source string on each chunk.");
   console.log("@streamd uses incremental state; others re-parse from scratch.\n");
 
-  const streamSrc = generateMixed(50);
-
-  // Define streaming parsers — all receive (accumulated, state) → state
-  const streamParsers = [
+  const streamSource = generateMixed(50);
+  const streamParsers: ReadonlyArray<{
+    readonly name: string;
+    readonly fn: (accumulated: string, state: unknown) => unknown;
+  }> = [
     {
       name: "@streamd/parser",
-      fn: (acc: string, state: unknown) => streamdParse(acc, state as null).state,
+      fn: (accumulated, state) => streamdParse(accumulated, state as null).state,
     },
     {
       name: "marked",
-      fn: (acc: string, _state: unknown) => {
-        marked.lexer(acc);
+      fn: (accumulated) => {
+        marked.lexer(accumulated);
         return null;
       },
     },
     {
       name: "markdown-it",
-      fn: (acc: string, _state: unknown) => {
-        md.parse(acc, {});
+      fn: (accumulated) => {
+        md.parse(accumulated, {});
         return null;
       },
     },
     {
       name: "commonmark.js",
-      fn: (acc: string, _state: unknown) => {
-        cmParser.parse(acc);
+      fn: (accumulated) => {
+        cmParser.parse(accumulated);
         return null;
       },
     },
   ];
 
-  const streamHeader = ["Parser", "Chunks", "Total", "Per chunk (median)", "Throughput"];
-  const streamRows: Array<Array<string>> = [streamHeader];
-
-  for (const p of streamParsers) {
-    const r = benchStreamingFair(p.name, p.fn, streamSrc, 200, 10, 30);
-    streamRows.push([
-      p.name,
-      String(r.numChunks),
-      fmtMs(r.totalMedianMs),
-      fmtMs(r.perChunkMedianMs),
-      r.throughput.toFixed(1) + " MB/s",
+  const rows: Array<Array<string>> = [
+    ["Parser", "Chunks", "Total", "Per chunk (median)", "Throughput"],
+  ];
+  for (const parser of streamParsers) {
+    const result = benchStreamingFair(parser.name, parser.fn, streamSource, 200, 10, 30);
+    rows.push([
+      parser.name,
+      String(result.numChunks),
+      formatMs(result.totalMedianMs),
+      formatMs(result.perChunkMedianMs),
+      `${result.throughput.toFixed(1)} MB/s`,
     ]);
   }
 
-  // Add full parse reference
-  const fullR = bench("full", (s) => streamdParse(s), streamSrc, 100, 500);
-  streamRows.push([
+  const fullResult = bench("full", (s) => streamdParse(s), streamSource, 100, 500);
+  rows.push([
     "@streamd (full parse)",
     "1",
-    fmtMs(fullR.median),
+    formatMs(fullResult.median),
     "\u2014",
-    fullR.throughput.toFixed(1) + " MB/s",
+    `${fullResult.throughput.toFixed(1)} MB/s`,
   ]);
 
-  printTable(streamRows);
+  printTable(rows);
+}
 
-  // === Streaming at different chunk sizes (streamd only) ===
+/** Print the per-chunk-size breakdown section. */
+function printChunkSizeSection(): void {
   console.log("\n=== @streamd/parser Streaming by Chunk Size (50 KB) ===\n");
 
-  const csHeader = ["Chunk Size", "Chunks", "Total", "Per chunk (median)", "Throughput"];
-  const csRows: Array<Array<string>> = [csHeader];
+  const streamSource = generateMixed(50);
+  const rows: Array<Array<string>> = [
+    ["Chunk Size", "Chunks", "Total", "Per chunk (median)", "Throughput"],
+  ];
 
-  for (const cs of [3, 10, 50, 200, 1000]) {
-    const r = benchStreamingFair(
-      cs + "B",
-      (acc, state) => streamdParse(acc, state as null).state,
-      streamSrc,
-      cs,
+  for (const chunkSize of [3, 10, 50, 200, 1000]) {
+    const result = benchStreamingFair(
+      `${chunkSize}B`,
+      (accumulated, state) => streamdParse(accumulated, state as null).state,
+      streamSource,
+      chunkSize,
       10,
       30,
     );
-    csRows.push([
-      cs + "B",
-      String(r.numChunks),
-      fmtMs(r.totalMedianMs),
-      fmtMs(r.perChunkMedianMs),
-      r.throughput.toFixed(1) + " MB/s",
+    rows.push([
+      `${chunkSize}B`,
+      String(result.numChunks),
+      formatMs(result.totalMedianMs),
+      formatMs(result.perChunkMedianMs),
+      `${result.throughput.toFixed(1)} MB/s`,
     ]);
   }
 
-  printTable(csRows);
+  printTable(rows);
 }
-
-main();

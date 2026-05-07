@@ -1,157 +1,210 @@
 /**
  * Profile streaming paths — identifies where time is spent per chunk.
  *
- * Usage: npx tsx packages/bench/src/profile-streaming.ts
+ * Usage: `npx tsx packages/bench/src/profile-streaming.ts`
  *
  * @module bench/profile-streaming
  */
 import { parse as streamdParse } from "@streamd/parser";
+import { formatNs, printTable } from "./format";
 import { generateMixed } from "./generate";
+import type { ProfileResult } from "./types";
 
-function fmtNs(ns: number): string {
-  if (ns < 1000) return ns.toFixed(0) + " ns";
-  if (ns < 1_000_000) return (ns / 1000).toFixed(1) + " µs";
-  return (ns / 1_000_000).toFixed(2) + " ms";
-}
+/** Nanoseconds per millisecond — conversion factor for `performance.now()` deltas. */
+const NS_PER_MS = 1_000_000;
 
-interface ProfileResult {
-  label: string;
-  totalChunks: number;
-  medianNs: number;
-  p99Ns: number;
-  minNs: number;
-  maxNs: number;
-}
-
+/**
+ * Measure the per-chunk cost of streaming parsing.
+ *
+ * @param label - Human-readable scenario name for the output row.
+ * @param source - Full source to split into chunks.
+ * @param chunkSize - Byte length of each chunk.
+ * @param warmup - Warm-up iterations (not measured).
+ * @param iterations - Measured iterations.
+ * @returns Summary with median, p99, min and max chunk times in ns.
+ */
 function profileStreaming(
   label: string,
-  src: string,
+  source: string,
   chunkSize: number,
   warmup: number,
   iterations: number,
 ): ProfileResult {
-  const chunks: Array<string> = [];
-  for (let i = 0; i < src.length; i += chunkSize) {
-    chunks.push(src.slice(i, Math.min(i + chunkSize, src.length)));
-  }
-  const numChunks = chunks.length;
+  const chunks = chunkSource(source, chunkSize);
 
-  // Warmup
-  for (let w = 0; w < warmup; w++) {
-    let state: unknown = null;
-    let acc = "";
-    for (let c = 0; c < numChunks; c++) {
-      acc += chunks[c]!;
-      state = (streamdParse(acc, state as null) as { state: unknown }).state;
-    }
-  }
+  warmupRun(chunks, warmup);
+  const samples = measureRun(chunks, iterations);
+  samples.sort((a, b) => a - b);
 
-  // Measure per-chunk times
-  const times: Array<number> = [];
-  for (let iter = 0; iter < iterations; iter++) {
-    let state: unknown = null;
-    let acc = "";
-    for (let c = 0; c < numChunks; c++) {
-      acc += chunks[c]!;
-      const t0 = performance.now();
-      state = (streamdParse(acc, state as null) as { state: unknown }).state;
-      const elapsed = (performance.now() - t0) * 1_000_000; // ns
-      times.push(elapsed);
-    }
-  }
-
-  times.sort((a, b) => a - b);
   return {
     label,
-    totalChunks: numChunks,
-    medianNs: times[Math.floor(times.length / 2)]!,
-    p99Ns: times[Math.floor(times.length * 0.99)]!,
-    minNs: times[0]!,
-    maxNs: times[times.length - 1]!,
+    totalChunks: chunks.length,
+    medianNs: samples[Math.floor(samples.length / 2)] ?? 0,
+    p99Ns: samples[Math.floor(samples.length * 0.99)] ?? 0,
+    minNs: samples[0] ?? 0,
+    maxNs: samples[samples.length - 1] ?? 0,
   };
 }
 
-function printResults(results: Array<ProfileResult>): void {
-  const rows: Array<Array<string>> = [["Scenario", "Chunks", "Median", "p99", "Min", "Max"]];
-  for (const r of results) {
-    rows.push([
-      r.label,
-      String(r.totalChunks),
-      fmtNs(r.medianNs),
-      fmtNs(r.p99Ns),
-      fmtNs(r.minNs),
-      fmtNs(r.maxNs),
-    ]);
+/**
+ * Split the source into equal-sized chunks.
+ *
+ * @param source - Full source string.
+ * @param chunkSize - Byte length of each chunk.
+ * @returns Array of chunk strings.
+ */
+function chunkSource(source: string, chunkSize: number): ReadonlyArray<string> {
+  const chunks: Array<string> = [];
+  for (let i = 0; i < source.length; i += chunkSize) {
+    chunks.push(source.slice(i, Math.min(i + chunkSize, source.length)));
   }
-  const cols = rows[0]!.length;
-  const widths: Array<number> = [];
-  for (let c = 0; c < cols; c++) {
-    let max = 0;
-    for (const row of rows) {
-      if (row[c]!.length > max) max = row[c]!.length;
-    }
-    widths.push(max);
+  return chunks;
+}
+
+/**
+ * Run the stream `warmup` times without recording timings.
+ *
+ * @param chunks - Pre-split source chunks.
+ * @param warmup - Number of warmup passes.
+ */
+function warmupRun(chunks: ReadonlyArray<string>, warmup: number): void {
+  for (let w = 0; w < warmup; w++) streamThrough(chunks);
+}
+
+/**
+ * Run the stream `iterations` times, returning per-chunk times in ns.
+ *
+ * @param chunks - Pre-split source chunks.
+ * @param iterations - Number of measured passes.
+ * @returns Flat array of per-chunk nanosecond timings across all iterations.
+ */
+function measureRun(chunks: ReadonlyArray<string>, iterations: number): Array<number> {
+  const times: Array<number> = [];
+  for (let iter = 0; iter < iterations; iter++) {
+    times.push(...streamThroughMeasured(chunks));
   }
-  for (let r = 0; r < rows.length; r++) {
-    const cells = rows[r]!.map((cell, c) =>
-      c === 0 ? cell.padEnd(widths[c]!) : cell.padStart(widths[c]!),
-    );
-    console.log(`| ${cells.join(" | ")} |`);
-    if (r === 0) console.log(`|${widths.map((w) => "-".repeat(w + 2)).join("|")}|`);
+  return times;
+}
+
+/**
+ * Parse a full stream once without timings.
+ *
+ * @param chunks - Pre-split source chunks.
+ */
+function streamThrough(chunks: ReadonlyArray<string>): void {
+  let state: ReturnType<typeof streamdParse>["state"] | null = null;
+  let accumulated = "";
+  for (let c = 0; c < chunks.length; c++) {
+    accumulated += chunks[c] ?? "";
+    const result = streamdParse(accumulated, state as null);
+    state = result.state;
   }
 }
 
-// ── Plain text (text-append fast path) ────────────────────────
-console.log("=== Text-Append Fast Path (pure words, no newlines) ===\n");
+/**
+ * Parse a stream once and return the per-chunk time in nanoseconds.
+ *
+ * @param chunks - Pre-split source chunks.
+ * @returns Array of per-chunk nanosecond timings for this pass.
+ */
+function streamThroughMeasured(chunks: ReadonlyArray<string>): Array<number> {
+  const perChunk: Array<number> = [];
+  let state: ReturnType<typeof streamdParse>["state"] | null = null;
+  let accumulated = "";
+  for (let c = 0; c < chunks.length; c++) {
+    accumulated += chunks[c] ?? "";
+    const start = performance.now();
+    const result = streamdParse(accumulated, state as null);
+    state = result.state;
+    perChunk.push((performance.now() - start) * NS_PER_MS);
+  }
+  return perChunk;
+}
 
-const plainText = "The quick brown fox jumps over the lazy dog and keeps running forever. ".repeat(
-  150,
-);
-printResults([
-  profileStreaming("3B chunks", plainText, 3, 20, 50),
-  profileStreaming("10B chunks", plainText, 10, 20, 50),
-  profileStreaming("50B chunks", plainText, 50, 20, 50),
-]);
+/**
+ * Print the set of profile results as a markdown-style table.
+ *
+ * @param results - Array of profile results to render.
+ */
+function printResults(results: ReadonlyArray<ProfileResult>): void {
+  const rows: Array<Array<string>> = [["Scenario", "Chunks", "Median", "p99", "Min", "Max"]];
+  for (const result of results) {
+    rows.push([
+      result.label,
+      String(result.totalChunks),
+      formatNs(result.medianNs),
+      formatNs(result.p99Ns),
+      formatNs(result.minNs),
+      formatNs(result.maxNs),
+    ]);
+  }
+  printTable(rows);
+}
 
-// ── Fenced code (fence-check fast path) ───────────────────────
-console.log("\n=== Fenced Code Fast Path ===\n");
+runTextAppendSection();
+runFencedCodeSection();
+runParagraphInlineSection();
+runMixedSection();
+runNewlineParagraphSection();
+runConcatTokensSection();
 
-const codeBlock = "```js\n" + "const x = 1;\n".repeat(800) + "```\n";
-printResults([
-  profileStreaming("3B chunks", codeBlock, 3, 20, 50),
-  profileStreaming("10B chunks", codeBlock, 10, 20, 50),
-  profileStreaming("50B chunks", codeBlock, 50, 20, 50),
-]);
+/** Section: text-append fast path. */
+function runTextAppendSection(): void {
+  console.log("=== Text-Append Fast Path (pure words, no newlines) ===\n");
+  const plainText =
+    "The quick brown fox jumps over the lazy dog and keeps running forever. ".repeat(150);
+  printResults([
+    profileStreaming("3B chunks", plainText, 3, 20, 50),
+    profileStreaming("10B chunks", plainText, 10, 20, 50),
+    profileStreaming("50B chunks", plainText, 50, 20, 50),
+  ]);
+}
 
-// ── Paragraph with bold (inline re-parse) ─────────────────────
-console.log("\n=== Paragraph with Inline Formatting (re-parse path) ===\n");
+/** Section: fenced-code fast path. */
+function runFencedCodeSection(): void {
+  console.log("\n=== Fenced Code Fast Path ===\n");
+  const codeBlock = `\`\`\`js\n${"const x = 1;\n".repeat(800)}\`\`\`\n`;
+  printResults([
+    profileStreaming("3B chunks", codeBlock, 3, 20, 50),
+    profileStreaming("10B chunks", codeBlock, 10, 20, 50),
+    profileStreaming("50B chunks", codeBlock, 50, 20, 50),
+  ]);
+}
 
-const boldPara = "This is text with **bold** and *italic* markers. ".repeat(200);
-printResults([
-  profileStreaming("1KB para, 50B", boldPara.slice(0, 1024), 50, 20, 100),
-  profileStreaming("5KB para, 50B", boldPara.slice(0, 5120), 50, 20, 50),
-  profileStreaming("10KB para, 50B", boldPara.slice(0, 10240), 50, 20, 30),
-]);
+/** Section: paragraph inline re-parse scaling. */
+function runParagraphInlineSection(): void {
+  console.log("\n=== Paragraph with Inline Formatting (re-parse path) ===\n");
+  const boldPara = "This is text with **bold** and *italic* markers. ".repeat(200);
+  printResults([
+    profileStreaming("1KB para, 50B", boldPara.slice(0, 1024), 50, 20, 100),
+    profileStreaming("5KB para, 50B", boldPara.slice(0, 5120), 50, 20, 50),
+    profileStreaming("10KB para, 50B", boldPara.slice(0, 10240), 50, 20, 30),
+  ]);
+}
 
-// ── Mixed markdown (all paths) ────────────────────────────────
-console.log("\n=== Mixed Markdown (all fast paths) ===\n");
+/** Section: mixed markdown (all fast paths active). */
+function runMixedSection(): void {
+  console.log("\n=== Mixed Markdown (all fast paths) ===\n");
+  printResults([
+    profileStreaming("1KB mixed, 3B", generateMixed(1), 3, 20, 100),
+    profileStreaming("10KB mixed, 50B", generateMixed(10), 50, 20, 50),
+    profileStreaming("50KB mixed, 50B", generateMixed(50), 50, 20, 30),
+  ]);
+}
 
-printResults([
-  profileStreaming("1KB mixed, 3B", generateMixed(1), 3, 20, 100),
-  profileStreaming("10KB mixed, 50B", generateMixed(10), 50, 20, 50),
-  profileStreaming("50KB mixed, 50B", generateMixed(50), 50, 20, 30),
-]);
+/** Section: many softbreaks inside one paragraph. */
+function runNewlineParagraphSection(): void {
+  console.log("\n=== Paragraph with Newlines (softbreak tokens) ===\n");
+  const newlineParagraph = "Line of text here\n".repeat(600);
+  printResults([
+    profileStreaming("10KB, 50B chunks", newlineParagraph.slice(0, 10240), 50, 20, 50),
+  ]);
+}
 
-// ── Newline-heavy paragraph (softbreak handling) ──────────────
-console.log("\n=== Paragraph with Newlines (softbreak tokens) ===\n");
-
-const newlinePara = "Line of text here\n".repeat(600);
-printResults([profileStreaming("10KB, 50B chunks", newlinePara.slice(0, 10240), 50, 20, 50)]);
-
-// ── concatTokens overhead ─────────────────────────────────────
-console.log("\n=== After Many Completed Blocks (concatTokens scaling) ===\n");
-
-// Many short blocks followed by streaming paragraph
-const manyBlocks = "# H\n\n".repeat(200) + "Streaming paragraph ";
-const manyBlocksSrc = manyBlocks + "word ".repeat(100);
-printResults([profileStreaming("200 completed + para, 5B", manyBlocksSrc, 5, 10, 50)]);
+/** Section: scaling after many completed blocks (concat overhead). */
+function runConcatTokensSection(): void {
+  console.log("\n=== After Many Completed Blocks (concatTokens scaling) ===\n");
+  const manyBlocks = `${"# H\n\n".repeat(200)}Streaming paragraph `;
+  const manyBlocksSource = `${manyBlocks}${"word ".repeat(100)}`;
+  printResults([profileStreaming("200 completed + para, 5B", manyBlocksSource, 5, 10, 50)]);
+}

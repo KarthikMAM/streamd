@@ -14,8 +14,12 @@
     "vitest.ts",
     "tsconfig"
   ],
-  "dependencies": {
-    "tsdown": "^0.21.0",
+  "peerDependencies": {
+    "tsdown": "~0.21.0",
+    "vitest": "^3.2.0"
+  },
+  "devDependencies": {
+    "tsdown": "~0.21.0",
     "vitest": "^3.2.0"
   }
 }

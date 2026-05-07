@@ -7,6 +7,11 @@
  */
 import type { TokensList } from "./tokens";
 
+/**
+ * Options accepted by `parse()` and `createParser()`. All extensions default
+ * to `false` and are opt-in; enabling `gfm` switches on tables, strikethrough,
+ * task lists, and autolinks unless each is individually overridden.
+ */
 export interface ParseOptions {
   /** Enable all GFM extensions at once. Default: false */
   gfm?: boolean;
@@ -32,6 +37,13 @@ export interface ParserState {
   readonly _brand: "ParserState";
 }
 
+/**
+ * Return value of `parse()`. `tokens` holds both finalized tokens and any
+ * speculative tokens produced by auto-closing open blocks; `stableCount`
+ * tells consumers how many leading tokens will not change on future chunks
+ * and are safe to commit. `state` is opaque and must be passed back to the
+ * next `parse()` call to continue streaming.
+ */
 export interface ParseResult {
   /** All tokens: stable (finalized) + speculative (auto-closed open blocks) */
   tokens: TokensList;

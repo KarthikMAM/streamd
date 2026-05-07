@@ -8,6 +8,10 @@
     "test": "vitest run",
     "sync": "node scripts/sync.mjs"
   },
+  "dependencies": {
+    "@streamd/html": "*",
+    "@streamd/parser": "*"
+  },
   "devDependencies": {
     "@streamd/config": "*",
     "html-minifier-terser": "^7.2.0",

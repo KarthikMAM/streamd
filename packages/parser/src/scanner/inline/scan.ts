@@ -44,7 +44,13 @@ import { scanHtmlInline } from "./html";
 import { scanLinkOrImage } from "./link";
 import { scanMathInline } from "./math";
 
-/** Module-level reusable node pool — never shrunk, only grown. */
+/**
+ * Module-level reusable node pool — never shrunk, only grown.
+ *
+ * Module-level because inline parsing is the hottest allocation path.
+ * Reusing the same array across all `parseInlines` calls eliminates GC
+ * pressure from per-call node allocation. Single-threaded use only.
+ */
 const NODE_POOL: Array<InlineNode> = [];
 
 /** Ensure pool has at least `count` entries, growing if needed */

@@ -40,7 +40,7 @@ import {
   createListToken,
   createParagraphToken,
 } from "../utils/token-factory";
-import type { AssembleOpts } from "./assemble";
+import type { AssembleOpts } from "./types";
 
 /** Max recursive nesting depth for container blocks. */
 const MAX_NESTING_DEPTH = 100;
@@ -84,7 +84,17 @@ export function assembleBlockquote(
   return createBlockquoteToken(children);
 }
 
-/** Strip `>` prefixes from blockquote content lines. */
+/**
+ * Strip `>` prefixes from blockquote content lines.
+ *
+ * Produces a plain string with the `>` markers removed, suitable for
+ * recursive block scanning of the inner content.
+ *
+ * @param src - Source string
+ * @param start - Start of blockquote content
+ * @param end - End of blockquote content
+ * @returns Inner content with `>` prefixes stripped
+ */
 function stripBlockquotePrefixes(src: string, start: number, end: number): string {
   const parts: Array<string> = [];
   let pos = start;
@@ -136,7 +146,10 @@ export function assembleList(
   return createListToken(block.ordered, block.listStart, tight, items);
 }
 
-/** Reusable indent result. */
+/**
+ * Reusable indent result — module-level to avoid per-call allocation.
+ * Mutated by `countIndent`; safe because this file has its own instance.
+ */
 const IND = { indent: 0, pos: 0 };
 
 /** Parse list items from a content range. */
@@ -207,7 +220,15 @@ function parseListItems(
   return items;
 }
 
-/** Find the start of list item content (past marker + space). */
+/**
+ * Find the start of list item content (past marker + space).
+ *
+ * @param src - Source string
+ * @param fns - First non-space position on the line
+ * @param lineEnd - End of line boundary
+ * @param ordered - Whether this is an ordered list
+ * @returns Position of content start, or -1 if not a valid list item
+ */
 function findItemContentStart(src: string, fns: number, lineEnd: number, ordered: boolean): number {
   let p = fns;
   if (ordered) {
@@ -225,7 +246,15 @@ function findItemContentStart(src: string, fns: number, lineEnd: number, ordered
   return p;
 }
 
-/** Find the end of a list item (next item start or content end). */
+/**
+ * Find the end of a list item (next item start or content end).
+ *
+ * @param src - Source string
+ * @param contentStart - Start of this item's content
+ * @param contentEnd - End of the entire list content range
+ * @param ordered - Whether this is an ordered list
+ * @returns End offset of this item's content
+ */
 function findItemEnd(
   src: string,
   contentStart: number,
@@ -275,7 +304,14 @@ function findItemEnd(
   return contentEnd;
 }
 
-/** Check if there's a blank line between list items. */
+/**
+ * Check if there's a blank line between list items (determines tight/loose).
+ *
+ * @param src - Source string
+ * @param start - Start of list content range
+ * @param end - End of list content range
+ * @returns True if a blank line separates any two items
+ */
 function hasBlankLineBetweenItems(src: string, start: number, end: number): boolean {
   let pos = start;
   let inItem = false;

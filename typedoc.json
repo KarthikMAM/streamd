@@ -1,0 +1,37 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPointStrategy": "packages",
+  "entryPoints": [
+    "packages/parser",
+    "packages/tokens",
+    "packages/html",
+    "packages/plugins",
+    "packages/react",
+    "packages/react-native"
+  ],
+  "out": "apps/docs/static/api",
+  "name": "streamd API reference",
+  "readme": "./docs/typedoc-readme.md",
+  "includeVersion": true,
+  "hideGenerator": true,
+  "githubPages": false,
+  "navigationLinks": {
+    "Docs site": "/",
+    "GitHub": "https://github.com/KarthikMAM/streamd"
+  },
+  "gitRevision": "main",
+  "sourceLinkTemplate": "https://github.com/KarthikMAM/streamd/blob/{gitRevision}/{path}#L{line}",
+  "packageOptions": {
+    "excludeInternal": true,
+    "excludePrivate": true,
+    "excludeExternals": true,
+    "sort": ["source-order"]
+  },
+  "validation": {
+    "invalidLink": true,
+    "notExported": true,
+    "rewrittenLink": true
+  },
+  "treatWarningsAsErrors": false,
+  "skipErrorChecking": false
+}

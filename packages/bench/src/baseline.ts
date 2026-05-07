@@ -1,179 +1,216 @@
 /**
  * Baseline benchmark — captures static and streaming performance.
  *
- * Run before and after changes to verify zero static regression
- * and measure streaming improvements.
+ * Run before and after changes to verify zero static regression and measure
+ * streaming improvements.
  *
- * Usage: npx tsx packages/bench/src/baseline.ts
+ * Usage: `npx tsx packages/bench/src/baseline.ts`
  *
  * @module bench/baseline
  */
 import { parse as streamdParse } from "@streamd/parser";
+import { formatMs, printTable } from "./format";
 import { generateCode, generateMixed, generateParagraphs } from "./generate";
 import { bench, benchStreaming } from "./runner";
+import type { StaticInput } from "./types";
 
-function printTable(rows: Array<Array<string>>): void {
-  if (rows.length === 0) return;
-  const cols = rows[0]!.length;
-  const widths: Array<number> = [];
-  for (let c = 0; c < cols; c++) {
-    let max = 0;
-    for (const row of rows) {
-      if (row[c]!.length > max) max = row[c]!.length;
-    }
-    widths.push(max);
-  }
-  for (let r = 0; r < rows.length; r++) {
-    const cells = rows[r]!.map((cell, c) =>
-      c === 0 ? cell.padEnd(widths[c]!) : cell.padStart(widths[c]!),
-    );
-    console.log(`| ${cells.join(" | ")} |`);
-    if (r === 0) console.log(`|${widths.map((w) => "-".repeat(w + 2)).join("|")}|`);
-  }
-}
-
-function fmtMs(ms: number): string {
-  if (ms < 0.001) return (ms * 1_000_000).toFixed(0) + " ns";
-  if (ms < 1) return (ms * 1000).toFixed(1) + " \u00B5s";
-  return ms.toFixed(3) + " ms";
-}
-
-// ── Static parse ──────────────────────────────────────────────
-
-console.log("=== Static Parse (@streamd/parser only) ===\n");
-
-const staticInputs = [
-  { label: "Mixed 1 KB", src: generateMixed(1), warmup: 500, iter: 5000 },
-  { label: "Mixed 10 KB", src: generateMixed(10), warmup: 200, iter: 2000 },
-  { label: "Mixed 50 KB", src: generateMixed(50), warmup: 100, iter: 500 },
-  { label: "Mixed 500 KB", src: generateMixed(500), warmup: 20, iter: 100 },
-  { label: "Paragraphs 50 KB", src: generateParagraphs(50), warmup: 100, iter: 500 },
-  { label: "Code blocks 50 KB", src: generateCode(50), warmup: 100, iter: 500 },
-  { label: "Pathological * x10000", src: "*".repeat(10000), warmup: 200, iter: 2000 },
-  { label: "Pathological > x200", src: "> ".repeat(200) + "text", warmup: 200, iter: 2000 },
-];
-
-const staticRows: Array<Array<string>> = [["Input", "Median", "p95", "Throughput"]];
-for (const { label, src, warmup, iter } of staticInputs) {
-  const r = bench(label, (s) => streamdParse(s), src, warmup, iter);
-  staticRows.push([label, fmtMs(r.median), fmtMs(r.p95), r.throughput.toFixed(1) + " MB/s"]);
-}
-printTable(staticRows);
-
-// ── Streaming: fast-path breakdown ────────────────────────────
-
-console.log("\n=== Streaming Fast-Path Breakdown (50 KB mixed) ===\n");
-console.log("Each row simulates LLM streaming at different chunk sizes.\n");
-
-const streamSrc = generateMixed(50);
-const streamHeader = ["Scenario", "Chunks", "Total", "Per chunk (median)", "Throughput"];
-const streamRows: Array<Array<string>> = [streamHeader];
-
-for (const cs of [3, 10, 50, 200, 1000]) {
-  const r = benchStreaming(
-    `${cs}B chunks`,
-    (acc: string, state?: unknown) => streamdParse(acc, state as null),
-    streamSrc,
-    cs,
-    20,
-    50,
-  );
-  streamRows.push([
-    `Mixed ${cs}B chunks`,
-    String(r.numChunks),
-    fmtMs(r.totalMs),
-    fmtMs(r.perChunkMedianMs),
-    r.throughput.toFixed(1) + " MB/s",
-  ]);
-}
-
-// Full parse baseline for comparison
-const fullR = bench("full", (s) => streamdParse(s), streamSrc, 100, 500);
-streamRows.push([
-  "Full parse (no streaming)",
-  "1",
-  fmtMs(fullR.median),
-  "\u2014",
-  fullR.throughput.toFixed(1) + " MB/s",
-]);
-
-printTable(streamRows);
-
-// ── Streaming: content-type breakdown ─────────────────────────
-
-console.log("\n=== Streaming by Content Type (10 KB, 50B chunks) ===\n");
-console.log("Tests which fast paths fire for different content.\n");
-
-const contentTypes = [
+/** Static-parse cases covering mixed, paragraph-heavy, code-heavy, and pathological inputs. */
+const staticCases: ReadonlyArray<StaticInput> = [
+  { label: "Mixed 1 KB", source: generateMixed(1), warmup: 500, iterations: 5000 },
+  { label: "Mixed 10 KB", source: generateMixed(10), warmup: 200, iterations: 2000 },
+  { label: "Mixed 50 KB", source: generateMixed(50), warmup: 100, iterations: 500 },
+  { label: "Mixed 500 KB", source: generateMixed(500), warmup: 20, iterations: 100 },
+  { label: "Paragraphs 50 KB", source: generateParagraphs(50), warmup: 100, iterations: 500 },
+  { label: "Code blocks 50 KB", source: generateCode(50), warmup: 100, iterations: 500 },
+  { label: "Pathological * x10000", source: "*".repeat(10000), warmup: 200, iterations: 2000 },
   {
-    label: "Plain text (no special chars)",
-    src: "The quick brown fox jumps over the lazy dog and keeps running. ".repeat(170),
+    label: "Pathological > x200",
+    source: `${"> ".repeat(200)}text`,
+    warmup: 200,
+    iterations: 2000,
   },
-  { label: "Paragraphs with **bold**", src: generateParagraphs(10) },
-  { label: "Fenced code blocks", src: generateCode(10) },
-  { label: "Mixed markdown", src: generateMixed(10) },
-  { label: "Heavy inline: *a* **b** `c` [d](e)", src: "*a* **b** `c` [d](e) ~f~ ".repeat(400) },
 ];
 
-const contentHeader = ["Content Type", "Chunks", "Total", "Per chunk (median)", "Throughput"];
-const contentRows: Array<Array<string>> = [contentHeader];
+runStaticSection();
+runStreamingFastPathSection();
+runContentTypeSection();
+runParagraphScalingSection();
 
-for (const { label, src } of contentTypes) {
-  const r = benchStreaming(
-    label,
-    (acc: string, state?: unknown) => streamdParse(acc, state as null),
-    src,
-    50,
+/** Print the static-parse throughput section. */
+function runStaticSection(): void {
+  console.log("=== Static Parse (@streamd/parser only) ===\n");
+
+  const rows: Array<Array<string>> = [["Input", "Median", "p95", "Throughput"]];
+  for (const testCase of staticCases) {
+    const result = bench(
+      testCase.label,
+      (input) => streamdParse(input),
+      testCase.source,
+      testCase.warmup,
+      testCase.iterations,
+    );
+    rows.push([
+      testCase.label,
+      formatMs(result.median),
+      formatMs(result.p95),
+      `${result.throughput.toFixed(1)} MB/s`,
+    ]);
+  }
+
+  printTable(rows);
+}
+
+/** Print the streaming fast-path breakdown section. */
+function runStreamingFastPathSection(): void {
+  console.log("\n=== Streaming Fast-Path Breakdown (50 KB mixed) ===\n");
+  console.log("Each row simulates LLM streaming at different chunk sizes.\n");
+
+  const streamSource = generateMixed(50);
+  const rows: Array<Array<string>> = [
+    ["Scenario", "Chunks", "Total", "Per chunk (median)", "Throughput"],
+  ];
+
+  for (const chunkSize of [3, 10, 50, 200, 1000]) {
+    rows.push(benchRowForStreaming(streamSource, chunkSize));
+  }
+  rows.push(fullParseRowFor(streamSource));
+
+  printTable(rows);
+}
+
+/**
+ * Build a row for `benchStreaming` at a given chunk size.
+ *
+ * @param source - Full markdown source to stream.
+ * @param chunkSize - Byte length of each chunk.
+ * @returns Array of cell strings for the table row.
+ */
+function benchRowForStreaming(source: string, chunkSize: number): Array<string> {
+  const result = benchStreaming(
+    `${chunkSize}B chunks`,
+    (accumulated, state) => streamdParse(accumulated, state as null),
+    source,
+    chunkSize,
     20,
     50,
   );
-  contentRows.push([
-    label,
-    String(r.numChunks),
-    fmtMs(r.totalMs),
-    fmtMs(r.perChunkMedianMs),
-    r.throughput.toFixed(1) + " MB/s",
-  ]);
+  return [
+    `Mixed ${chunkSize}B chunks`,
+    String(result.numChunks),
+    formatMs(result.totalMs),
+    formatMs(result.perChunkMedianMs),
+    `${result.throughput.toFixed(1)} MB/s`,
+  ];
 }
 
-printTable(contentRows);
+/**
+ * Build the full-parse reference row for the streaming section.
+ *
+ * @param source - Full markdown source to parse in one shot.
+ * @returns Array of cell strings for the table row.
+ */
+function fullParseRowFor(source: string): Array<string> {
+  const result = bench("full", (input) => streamdParse(input), source, 100, 500);
+  return [
+    "Full parse (no streaming)",
+    "1",
+    formatMs(result.median),
+    "\u2014",
+    `${result.throughput.toFixed(1)} MB/s`,
+  ];
+}
 
-// ── Streaming: paragraph scaling ──────────────────────────────
+/** Print the content-type breakdown section. */
+function runContentTypeSection(): void {
+  console.log("\n=== Streaming by Content Type (10 KB, 50B chunks) ===\n");
+  console.log("Tests which fast paths fire for different content.\n");
 
-console.log("\n=== Paragraph Scaling (single paragraph, 50B chunks) ===\n");
-console.log("Shows O(N_para) inline re-parse cost as paragraph grows.\n");
+  const samples: ReadonlyArray<{ readonly label: string; readonly source: string }> = [
+    {
+      label: "Plain text (no special chars)",
+      source: "The quick brown fox jumps over the lazy dog and keeps running. ".repeat(170),
+    },
+    { label: "Paragraphs with **bold**", source: generateParagraphs(10) },
+    { label: "Fenced code blocks", source: generateCode(10) },
+    { label: "Mixed markdown", source: generateMixed(10) },
+    {
+      label: "Heavy inline: *a* **b** `c` [d](e)",
+      source: "*a* **b** `c` [d](e) ~f~ ".repeat(400),
+    },
+  ];
 
-const paraScaleHeader = ["Paragraph Size", "Chunks", "Total", "Per chunk (median)", "vs 1KB"];
-const paraScaleRows: Array<Array<string>> = [paraScaleHeader];
-let baselinePerChunk = 0;
+  const rows: Array<Array<string>> = [
+    ["Content Type", "Chunks", "Total", "Per chunk (median)", "Throughput"],
+  ];
+  for (const sample of samples) {
+    const result = benchStreaming(
+      sample.label,
+      (accumulated, state) => streamdParse(accumulated, state as null),
+      sample.source,
+      50,
+      20,
+      50,
+    );
+    rows.push([
+      sample.label,
+      String(result.numChunks),
+      formatMs(result.totalMs),
+      formatMs(result.perChunkMedianMs),
+      `${result.throughput.toFixed(1)} MB/s`,
+    ]);
+  }
 
-for (const sizeKb of [1, 5, 10, 25, 50]) {
-  // Single long paragraph with occasional bold markers
-  const para = "Hello world this is text with **bold** and *italic* markers. "
-    .repeat(Math.ceil((sizeKb * 1024) / 60))
-    .slice(0, sizeKb * 1024);
-  const r = benchStreaming(
-    `${sizeKb}KB`,
-    (acc: string, state?: unknown) => streamdParse(acc, state as null),
-    para,
-    50,
-    10,
-    30,
+  printTable(rows);
+}
+
+/** Print the paragraph-scaling section (shows O(N) inline re-parse cost). */
+function runParagraphScalingSection(): void {
+  console.log("\n=== Paragraph Scaling (single paragraph, 50B chunks) ===\n");
+  console.log("Shows O(N_para) inline re-parse cost as paragraph grows.\n");
+
+  const rows: Array<Array<string>> = [
+    ["Paragraph Size", "Chunks", "Total", "Per chunk (median)", "vs 1KB"],
+  ];
+  let baselinePerChunk = 0;
+
+  for (const sizeKb of [1, 5, 10, 25, 50]) {
+    const paragraph = buildParagraph(sizeKb);
+    const result = benchStreaming(
+      `${sizeKb}KB`,
+      (accumulated, state) => streamdParse(accumulated, state as null),
+      paragraph,
+      50,
+      10,
+      30,
+    );
+    if (sizeKb === 1) baselinePerChunk = result.perChunkMedianMs;
+    const ratio =
+      baselinePerChunk > 0 ? `${(result.perChunkMedianMs / baselinePerChunk).toFixed(1)}x` : "1.0x";
+    rows.push([
+      `${sizeKb} KB paragraph`,
+      String(result.numChunks),
+      formatMs(result.totalMs),
+      formatMs(result.perChunkMedianMs),
+      ratio,
+    ]);
+  }
+
+  printTable(rows);
+  console.log(
+    "\nIf per-chunk time scales linearly with paragraph size, inline re-parse is the bottleneck.",
   );
-  if (sizeKb === 1) baselinePerChunk = r.perChunkMedianMs;
-  const ratio =
-    baselinePerChunk > 0 ? (r.perChunkMedianMs / baselinePerChunk).toFixed(1) + "x" : "1.0x";
-  paraScaleRows.push([
-    `${sizeKb} KB paragraph`,
-    String(r.numChunks),
-    fmtMs(r.totalMs),
-    fmtMs(r.perChunkMedianMs),
-    ratio,
-  ]);
+  console.log("If it stays flat, fast paths are handling it.\n");
 }
 
-printTable(paraScaleRows);
-console.log(
-  "\nIf per-chunk time scales linearly with paragraph size, inline re-parse is the bottleneck.",
-);
-console.log("If it stays flat, fast paths are handling it.\n");
+/**
+ * Build a single paragraph of approximately `sizeKb` kilobytes with bold markers.
+ *
+ * @param sizeKb - Target size in kilobytes.
+ * @returns A single paragraph string with inline formatting.
+ */
+function buildParagraph(sizeKb: number): string {
+  const template = "Hello world this is text with **bold** and *italic* markers. ";
+  const bytesTarget = sizeKb * 1024;
+  const repetitions = Math.ceil(bytesTarget / template.length);
+  return template.repeat(repetitions).slice(0, bytesTarget);
+}

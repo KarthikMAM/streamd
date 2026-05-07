@@ -1,0 +1,9 @@
+{
+  "extends": "@streamd/config/tsconfig/base",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "rootDir": "./src"
+  },
+  "include": ["src"]
+}

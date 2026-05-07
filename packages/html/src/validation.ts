@@ -1,0 +1,76 @@
+/**
+ * Input validation at the public API trust boundary.
+ *
+ * Every `renderHtml` / `streamHtml` call funnels through these guards so
+ * bad input fails fast with a clear error instead of corrupting the output
+ * or crashing mid-render.
+ *
+ * @module validation
+ */
+
+import type { TokensList } from "@streamd/parser";
+import { describeArgumentType, StreamdArgumentError } from "@streamd/tokens";
+import { htmlErrorMessage } from "./messages";
+
+/** Package identifier used as the `source` field in all thrown errors. */
+const SOURCE = "@streamd/html";
+
+/**
+ * Error thrown when a `@streamd/html` public-API argument violates its
+ * contract. Extends the shared `StreamdArgumentError` so callers can
+ * write a single `catch` that covers every package.
+ */
+export class StreamdHtmlArgumentError extends StreamdArgumentError {
+  public constructor(options: StreamdHtmlArgumentErrorFields) {
+    super({
+      kind: options.kind,
+      source: SOURCE,
+      caller: options.caller,
+      message: options.message,
+    });
+    this.name = "StreamdHtmlArgumentError";
+  }
+}
+
+/** Fields accepted by the `StreamdHtmlArgumentError` constructor. */
+export interface StreamdHtmlArgumentErrorFields {
+  /** Discriminator identifying the category of argument violation. */
+  readonly kind: "tokens-not-array" | "source-not-string" | "unknown-token-type";
+  /** Name of the public API function that detected the violation. */
+  readonly caller: string;
+  /** Human-readable error message describing what went wrong. */
+  readonly message: string;
+}
+
+/**
+ * Assert that `tokens` is an array. Throws `StreamdHtmlArgumentError` with
+ * the caller name and the received type in the message.
+ *
+ * @param tokens Value received at a public API boundary.
+ * @param caller Name of the caller for diagnostics (e.g. `"renderHtml"`).
+ * @throws {StreamdHtmlArgumentError} When `tokens` is not an array.
+ */
+export function assertTokenList(tokens: unknown, caller: string): asserts tokens is TokensList {
+  if (Array.isArray(tokens)) return;
+  throw new StreamdHtmlArgumentError({
+    kind: "tokens-not-array",
+    caller,
+    message: htmlErrorMessage.tokensNotArray(caller, describeArgumentType(tokens)),
+  });
+}
+
+/**
+ * Assert that `source` is a string.
+ *
+ * @param source Value received for a source-string argument.
+ * @param caller Name of the caller for diagnostics.
+ * @throws {StreamdHtmlArgumentError} When `source` is not a string.
+ */
+export function assertString(source: unknown, caller: string): asserts source is string {
+  if (typeof source === "string") return;
+  throw new StreamdHtmlArgumentError({
+    kind: "source-not-string",
+    caller,
+    message: htmlErrorMessage.sourceNotString(caller, describeArgumentType(source)),
+  });
+}
