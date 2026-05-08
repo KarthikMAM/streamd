@@ -49,7 +49,6 @@ a `streamd` CLI that glues everything together for stdin/stdout use.
 | [`@streamd/react-native`](packages/react-native) | React Native renderer with `<StreamdMarkdownNative>` + `useStreamingMarkdown` hook |
 | [`@streamd/plugins`](packages/plugins) | Plugin pipeline with five built-ins (`sanitize`, `headingAnchors`, `linkAttributes`, `highlightCode`, `frontmatter`) and a mandatory ABI check |
 | [`@streamd/plugin-shiki`](packages/plugin-shiki) | [Shiki](https://shiki.style/) syntax-highlighter adapter — async factory, emits `meta.html` |
-| [`@streamd/plugin-katex`](packages/plugin-katex) | [KaTeX](https://katex.org/) math renderer adapter — sync factory, emits `meta.html` on `MathBlock` / `MathInline` |
 | [`@streamd/cli`](packages/cli) | `streamd` CLI — stream stdin through parse + render + plugins to stdout |
 
 Demos live in [`apps/html-demo`](apps/html-demo),
@@ -79,7 +78,6 @@ Optional adapters:
 
 ```bash
 npm install @streamd/plugins @streamd/plugin-shiki shiki
-npm install @streamd/plugins @streamd/plugin-katex katex
 npm install -g @streamd/cli
 ```
 
@@ -161,8 +159,9 @@ const html = renderHtml(tokens, {
 });
 ```
 
-Both [`@streamd/plugin-shiki`](packages/plugin-shiki) and
-[`@streamd/plugin-katex`](packages/plugin-katex) write their rendered
+Both [`@streamd/plugin-shiki`](packages/plugin-shiki) and custom math
+component overrides (see [Math rendering](#math-rendering) below)
+demonstrate the extension points. `plugin-shiki` writes pre-rendered
 HTML to `token.meta.html`. Renderers ignore that field unless
 `allowDangerousMetaHtml: true` is set — see the
 [Security model](#security-model) below for the full contract.
@@ -184,6 +183,33 @@ streamd --theme dark --class-prefix md --wrap-root < input.md > output.html
 
 See [`@streamd/cli`](packages/cli) for the full flag reference,
 streaming modes, exit codes, and security notes.
+
+### Math rendering
+
+The parser emits `MathBlock` / `MathInline` tokens with raw TeX as
+`content` when `math: true` is set. Rendering is a component-layer
+concern — supply a custom component override that calls KaTeX:
+
+```ts
+import { renderHtml } from "@streamd/html";
+import { parse } from "@streamd/parser";
+import katex from "katex";
+
+const { tokens } = parse(markdown, null, { math: true });
+
+const html = renderHtml(tokens, {
+  components: {
+    math_block: (token) =>
+      `<div class="math-display">${katex.renderToString(token.content, { displayMode: true })}</div>`,
+    math_inline: (token) =>
+      katex.renderToString(token.content, { displayMode: false }),
+  },
+});
+```
+
+No plugin needed — the consumer calls KaTeX directly against
+`token.content`. This keeps HTML emission as an explicit consumer
+choice rather than a plugin concern.
 
 ## Security model
 
@@ -214,10 +240,9 @@ contract — not a hint.
 
 ### 2. `allowDangerousMetaHtml` is opt-in on every renderer
 
-Some plugins (`highlightCode`, `@streamd/plugin-shiki`,
-`@streamd/plugin-katex`) emit pre-rendered HTML through
-`token.meta.html`. Renderers ignore this field by default. The caller
-must explicitly opt in:
+Some plugins (`highlightCode`, `@streamd/plugin-shiki`) emit
+pre-rendered HTML through `token.meta.html`. Renderers ignore this
+field by default. The caller must explicitly opt in:
 
 | Renderer | Opt-in |
 |---|---|
@@ -268,7 +293,7 @@ open a public issue for a suspected security bug.
 | Theming | CSS vars via `renderThemeStylesheet` | `<ThemeProvider>` + CSS vars | `<ThemeProvider>` + StyleSheet |
 | Plugins (shared pipeline) | ✓ | ✓ | ✓ |
 | Syntax highlighting via adapter | ✓ (`@streamd/plugin-shiki` + `allowDangerousMetaHtml`) | ✓ (same) | ✓ via custom `codeBlock` override (same flag) |
-| Math rendering via adapter | ✓ (`@streamd/plugin-katex` + `allowDangerousMetaHtml`) | ✓ (same) | ✓ via custom `mathBlock` override (same flag) |
+| Math rendering via adapter | ✓ (component override calling KaTeX) | ✓ (same) | ✓ via custom `mathBlock` override |
 | Accessibility attrs | `role="checkbox"` + `aria-checked` + `aria-disabled` on task items; `role="region"` + `aria-label` on code blocks | same as HTML | `accessibilityRole="header"` + `accessibilityLabel` on headings; `accessibilityRole="checkbox"` + `accessibilityState` on task items |
 | Runtime input validation | `StreamdHtmlArgumentError` | `StreamdReactArgumentError` | `StreamdReactNativeArgumentError` |
 

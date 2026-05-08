@@ -71,7 +71,7 @@ Plugins run before rendering. See
 | `taskListCheckboxes` | `"disabled"` | `"disabled"` → `<input disabled>`, `"none"` → `[ ]`/`[x]` text |
 | `math` | `"span-class"` | Math rendering strategy |
 | `plugins` | `[]` | Plugin pipeline applied before render |
-| `allowDangerousMetaHtml` | `false` | Opt-in — splice `token.meta.html` verbatim into the output. **Required** for plugin-attached HTML (`@streamd/plugin-shiki`, `@streamd/plugin-katex`, `highlightCode`) to render. When `false` (default), `meta.html` is ignored and tokens render through the built-in path. See [Security](#security) below. |
+| `allowDangerousMetaHtml` | `false` | Opt-in — splice `token.meta.html` verbatim into the output. **Required** for plugin-attached HTML (`@streamd/plugin-shiki`, `highlightCode`) to render. When `false` (default), `meta.html` is ignored and tokens render through the built-in path. See [Security](#security) below. |
 
 ## Security
 
@@ -146,9 +146,8 @@ try {
 ## Pairing
 
 - Parser: [`@streamd/parser`](../parser)
-- Plugins: [`@streamd/plugins`](../plugins) (+ optional adapters
-  [`@streamd/plugin-shiki`](../plugin-shiki),
-  [`@streamd/plugin-katex`](../plugin-katex))
+- Plugins: [`@streamd/plugins`](../plugins) (+ optional adapter
+  [`@streamd/plugin-shiki`](../plugin-shiki))
 - Monorepo overview: [`streamd README`](../../README.md)
 
 ## License

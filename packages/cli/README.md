@@ -137,8 +137,7 @@ Additional exports: `parseCliArgs`, `buildStreamOptions`,
 - Parser: [`@streamd/parser`](../parser)
 - HTML renderer: [`@streamd/html`](../html)
 - Plugin pipeline: [`@streamd/plugins`](../plugins) (+ optional
-  adapters [`@streamd/plugin-shiki`](../plugin-shiki),
-  [`@streamd/plugin-katex`](../plugin-katex))
+  adapter [`@streamd/plugin-shiki`](../plugin-shiki))
 - Monorepo overview: [`streamd README`](../../README.md)
 
 ## License

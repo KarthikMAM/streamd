@@ -33,7 +33,6 @@ const sidebars: SidebarsConfig = {
         "packages/react-native",
         "packages/plugins",
         "packages/plugin-shiki",
-        "packages/plugin-katex",
         "packages/cli",
       ],
     },

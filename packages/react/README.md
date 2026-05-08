@@ -87,8 +87,7 @@ import { headingAnchors, linkAttributes, sanitize } from "@streamd/plugins";
 ```
 
 Plugins that attach pre-rendered HTML to `token.meta.html` (for
-example [`@streamd/plugin-shiki`](../plugin-shiki) or
-[`@streamd/plugin-katex`](../plugin-katex)) require an explicit opt-in
+example [`@streamd/plugin-shiki`](../plugin-shiki)) require an explicit opt-in
 before the default components will consume the HTML:
 
 ```tsx

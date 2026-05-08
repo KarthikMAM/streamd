@@ -141,11 +141,11 @@ for a browser-hosted reference.
 - `renderReactNative` throws `StreamdReactNativeArgumentError` (a
   `TypeError` subclass) when `tokens` is not an array.
 - On native platforms, pre-rendered HTML (`meta.html` from plugins
-  like `@streamd/plugin-shiki` / `@streamd/plugin-katex`) cannot be
-  spliced directly into the view tree. These plugins are most useful
-  in the web-via-`react-native-web` case; for strictly native output,
-  prefer component overrides that restyle `CodeBlock` and `MathBlock`
-  tokens directly.
+  like `@streamd/plugin-shiki`) cannot be spliced directly into the
+  view tree. For math rendering, supply component overrides for
+  `math_block` / `math_inline` that use MathJax + `react-native-svg`
+  or a WebView. See the [math rendering](../recipes/math-rendering)
+  recipe.
 
 ## Source
 

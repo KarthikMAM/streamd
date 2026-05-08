@@ -118,13 +118,16 @@ The [custom-theme recipe](../recipes/custom-theme) shows the full
 - By default, raw `HtmlBlock` and `HtmlInline` tokens from the source
   are emitted verbatim. For untrusted input, add
   [`sanitize()`](./plugins#sanitize) as the **last** plugin.
-- `meta.html` (produced by plugins such as `@streamd/plugin-shiki` and
-  `@streamd/plugin-katex`) is **ignored by default**. Opt in with
+- `meta.html` (produced by plugins such as `@streamd/plugin-shiki`)
+  is **ignored by default**. Opt in with
   `allowDangerousMetaHtml: true` on the renderer options. When you do
   opt in, you are trusting every plugin in the pipeline to emit safe
-  HTML — see the [Shiki](../recipes/shiki-integration) and
-  [KaTeX](../recipes/math-rendering) recipes for the combinations that
-  work with `sanitize()`.
+  HTML — see the [Shiki](../recipes/shiki-integration) recipe for the
+  combinations that work with `sanitize()`.
+- Math rendering is a component-layer concern — supply
+  `components.math_block` / `components.math_inline` overrides that
+  call KaTeX directly. See the [math rendering](../recipes/math-rendering)
+  recipe.
 - `StreamdHtmlArgumentError` extends `TypeError`. `renderHtml` insists
   on `Array<Token>`; `streamHtml` insists on a `string` source.
 

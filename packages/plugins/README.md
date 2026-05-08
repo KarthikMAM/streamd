@@ -148,8 +148,7 @@ document is free.
 - React renderer: [`@streamd/react`](../react)
 - React Native renderer: [`@streamd/react-native`](../react-native)
 - Adapters that need `allowDangerousMetaHtml`:
-  [`@streamd/plugin-shiki`](../plugin-shiki),
-  [`@streamd/plugin-katex`](../plugin-katex)
+  [`@streamd/plugin-shiki`](../plugin-shiki)
 - Monorepo overview: [`streamd README`](../../README.md)
 
 ## License

@@ -1,8 +1,0 @@
-{
-  "extends": "@streamd/config/tsconfig/library",
-  "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": "./src"
-  },
-  "include": ["src"]
-}

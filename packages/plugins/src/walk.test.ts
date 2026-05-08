@@ -57,7 +57,7 @@ describe("walk", () => {
     const tokens = parse("a\n\nb\n").tokens;
     const out = walk(tokens, {
       block(t) {
-        return t.type === TokenType.Paragraph ? null : undefined;
+        return t.type === TokenType.Paragraph || t.type === TokenType.Space ? null : undefined;
       },
     });
     expect(out.length).toBe(0);
@@ -119,56 +119,6 @@ describe("applyPlugins", () => {
     const tokens = parse("y\n").tokens;
     const result = applyPlugins(tokens, []);
     expect(result.tokens).toBe(tokens);
-  });
-});
-
-describe("applyPlugins — sanitize-last ordering", () => {
-  it("accepts a pipeline ending with sanitize", () => {
-    const tokens = parse("z\n").tokens;
-    const first = makePlugin("first", (t) => t);
-    const sanitizePlugin = makePlugin("sanitize", (t) => t);
-    const result = applyPlugins(tokens, [first, sanitizePlugin]);
-    expect(result.tokens).toBe(tokens);
-  });
-
-  it("accepts sanitize as the sole plugin", () => {
-    const tokens = parse("z\n").tokens;
-    const sanitizePlugin = makePlugin("sanitize", (t) => t);
-    const result = applyPlugins(tokens, [sanitizePlugin]);
-    expect(result.tokens).toBe(tokens);
-  });
-
-  it("accepts a pipeline without any sanitize plugin", () => {
-    const tokens = parse("z\n").tokens;
-    const p1 = makePlugin("p1", (t) => t);
-    const p2 = makePlugin("p2", (t) => t);
-    const result = applyPlugins(tokens, [p1, p2]);
-    expect(result.tokens).toBe(tokens);
-  });
-
-  it("throws sanitize-not-last when sanitize is not the final plugin", () => {
-    const sanitizePlugin = makePlugin("sanitize", (t) => t);
-    const after = makePlugin("after", (t) => t);
-    expect(() => applyPlugins([], [sanitizePlugin, after])).toThrow(StreamdPluginAbiError);
-  });
-
-  it("sanitize-not-last error carries plugin name and kind", () => {
-    const sanitizePlugin = makePlugin("sanitize", (t) => t);
-    const after = makePlugin("after", (t) => t);
-    expect(() => applyPlugins([], [sanitizePlugin, after])).toThrow(
-      expect.objectContaining({
-        kind: "sanitize-not-last",
-        pluginName: "sanitize",
-        source: "@streamd/plugins",
-      }),
-    );
-  });
-
-  it("throws sanitize-not-last when sanitize is at the first of three", () => {
-    const sanitizePlugin = makePlugin("sanitize", (t) => t);
-    const p2 = makePlugin("p2", (t) => t);
-    const p3 = makePlugin("p3", (t) => t);
-    expect(() => applyPlugins([], [sanitizePlugin, p2, p3])).toThrow(StreamdPluginAbiError);
   });
 });
 

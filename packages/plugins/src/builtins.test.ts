@@ -6,6 +6,7 @@
 import {
   type CodeBlockToken,
   type HeadingToken,
+  type HighlightData,
   type LinkToken,
   parse,
   type TokensList,
@@ -54,16 +55,12 @@ describe("headingAnchors", () => {
   });
 
   it("preserves non-ASCII unicode characters verbatim in the slug", () => {
-    // Per the default slugifier, non-ASCII chars (code > 127) pass through
-    // rather than being dropped — exercises the ASCII-max branch.
     const tokens = parse("# café résumé\n").tokens;
     const out = applyPlugins(tokens, [headingAnchors()]).tokens;
     expect((out[0] as HeadingToken).meta?.id).toBe("café-résumé");
   });
 
   it("slugifies heading text that contains emphasis / strong / strikethrough / link / image", () => {
-    // The inline-text extractor must recurse through Em/Strong/Strikethrough/Link
-    // and read Image.alt — each `case` in inlineText() needs at least one fixture.
     const tokens = parse("# *a* **b** ~~c~~ [d](/x) ![e](/y)\n", null, { gfm: true }).tokens;
     const out = applyPlugins(tokens, [headingAnchors()]).tokens;
     expect((out[0] as HeadingToken).meta?.id).toBe("a-b-c-d-e");
@@ -128,7 +125,6 @@ describe("linkAttributes", () => {
       };
     }) as TokensList;
     const out = applyPlugins(poisoned, [linkAttributes({ anchorClassName: "anchor" })]).tokens;
-    // Idempotent — "anchor" stays as-is; no duplication.
     expect(findLink(out).meta?.className).toBe("anchor other");
   });
 
@@ -152,57 +148,77 @@ describe("linkAttributes", () => {
       };
     }) as TokensList;
     const out = applyPlugins(poisoned, [linkAttributes()]).tokens;
-    // Author-set target is preserved; plugin only adds rel.
     expect(findLink(out).meta?.target).toBe("_self");
   });
 });
 
 describe("highlightCode", () => {
-  it("stores pre-rendered html on code-block meta", () => {
+  /** Build a minimal HighlightData fixture. */
+  function makeHighlightData(code: string, lang: string): HighlightData {
+    return {
+      lines: [[{ text: code }]],
+      lang,
+      theme: "light",
+    };
+  }
+
+  it("stores structured HighlightData on code-block meta.highlight", () => {
     const tokens = parse("```js\nlet x=1;\n```\n").tokens;
     const out = applyPlugins(tokens, [
       highlightCode({
-        highlight: (code, lang) => `<pre class="hl-${lang}">${code}</pre>`,
+        highlight: (code, lang) => makeHighlightData(code, lang),
       }),
     ]).tokens;
     const block = out[0] as CodeBlockToken;
-    expect(block.meta?.html).toBe('<pre class="hl-js">let x=1;\n</pre>');
+    expect(block.meta?.highlight).not.toBeUndefined();
+    expect(block.meta?.highlight?.lang).toBe("js");
+    expect(block.meta?.highlight?.theme).toBe("light");
+    expect(block.meta?.highlight?.lines[0][0].text).toBe("let x=1;\n");
   });
 
   it("skips code blocks without a language by default", () => {
     const tokens = parse("```\nplain\n```\n").tokens;
-    const out = applyPlugins(tokens, [highlightCode({ highlight: () => "<x>" })]).tokens;
-    expect((out[0] as CodeBlockToken).meta?.html).toBeUndefined();
+    const out = applyPlugins(tokens, [
+      highlightCode({ highlight: () => makeHighlightData("x", "txt") }),
+    ]).tokens;
+    expect((out[0] as CodeBlockToken).meta?.highlight).toBeUndefined();
   });
 
   it("includes unknown-lang blocks when includeUnknown=true", () => {
     const tokens = parse("```\nplain\n```\n").tokens;
     const out = applyPlugins(tokens, [
-      highlightCode({ highlight: () => "<x>", includeUnknown: true }),
+      highlightCode({ highlight: (code) => makeHighlightData(code, ""), includeUnknown: true }),
     ]).tokens;
-    expect((out[0] as CodeBlockToken).meta?.html).toBe("<x>");
+    expect((out[0] as CodeBlockToken).meta?.highlight).not.toBeUndefined();
+    expect((out[0] as CodeBlockToken).meta?.highlight?.lines[0][0].text).toBe("plain\n");
   });
 
   it("leaves token unchanged when highlighter returns null", () => {
     const tokens = parse("```js\nx\n```\n").tokens;
     const out = applyPlugins(tokens, [highlightCode({ highlight: () => null })]).tokens;
-    expect((out[0] as CodeBlockToken).meta?.html).toBeUndefined();
+    expect((out[0] as CodeBlockToken).meta?.highlight).toBeUndefined();
+  });
+
+  it("leaves token unchanged when highlighter returns undefined", () => {
+    const tokens = parse("```js\nx\n```\n").tokens;
+    const out = applyPlugins(tokens, [highlightCode({ highlight: () => undefined })]).tokens;
+    expect((out[0] as CodeBlockToken).meta?.highlight).toBeUndefined();
+  });
+
+  it("does not overwrite existing meta.highlight", () => {
+    const tokens = parse("```js\nx\n```\n").tokens;
+    const existing: HighlightData = { lines: [[{ text: "pre" }]], lang: "js", theme: "dark" };
+    const preAnnotated = tokens.map((t) =>
+      t.type === TokenType.CodeBlock ? { ...t, meta: { highlight: existing } } : t,
+    ) as TokensList;
+    const out = applyPlugins(preAnnotated, [
+      highlightCode({ highlight: () => makeHighlightData("new", "js") }),
+    ]).tokens;
+    expect((out[0] as CodeBlockToken).meta?.highlight).toBe(existing);
   });
 });
 
 describe("sanitize", () => {
-  it("drops html blocks by default", () => {
-    const tokens = parse("<div>danger</div>\n\nsafe\n").tokens;
-    const out = applyPlugins(tokens, [sanitize()]).tokens;
-    expect(out.some((t) => t.type === TokenType.HtmlBlock)).toBe(false);
-  });
-
-  it("preserves html blocks when allowRawHtml=true", () => {
-    const tokens = parse("<div>ok</div>\n\nsafe\n").tokens;
-    const out = applyPlugins(tokens, [sanitize({ allowRawHtml: true })]).tokens;
-    expect(out.some((t) => t.type === TokenType.HtmlBlock)).toBe(true);
-  });
-
   it("rewrites javascript: links to fallback", () => {
     const tokens = parse("[bad](javascript:alert(1))\n").tokens;
     const out = applyPlugins(tokens, [sanitize()]).tokens;
@@ -219,22 +235,6 @@ describe("sanitize", () => {
     const tokens = parse("[x](custom:foo)\n").tokens;
     const out = applyPlugins(tokens, [sanitize({ allowedProtocols: ["custom:"] })]).tokens;
     expect(findLink(out).href).toBe("custom:foo");
-  });
-
-  it("strips meta.html from every token when allowRawHtml is false", () => {
-    const tokens = parse("# heading\n\npara\n").tokens;
-    const poisoned = tokens.map((t) => ({ ...t, meta: { html: "<script>alert(1)</script>" } }));
-    const out = applyPlugins(poisoned as TokensList, [sanitize()]).tokens;
-    for (const token of out) {
-      expect(token.meta?.html).toBeUndefined();
-    }
-  });
-
-  it("preserves meta.html when allowRawHtml is true", () => {
-    const tokens = parse("# heading\n").tokens;
-    const poisoned = tokens.map((t) => ({ ...t, meta: { html: "<b>ok</b>" } }));
-    const out = applyPlugins(poisoned as TokensList, [sanitize({ allowRawHtml: true })]).tokens;
-    expect(out[0]?.meta?.html).toBe("<b>ok</b>");
   });
 
   it("removes disallowed keys from meta.attrs and keeps allowed ones", () => {
@@ -277,17 +277,21 @@ describe("sanitize", () => {
     expect(out[0]?.meta?.attrs).toBe(attrs);
   });
 
-  it("walks inline tokens too when cleaning meta", () => {
+  it("walks inline tokens too when cleaning meta.attrs", () => {
     const tokens = parse("hello\n").tokens;
     const para = tokens[0];
     if (para?.type !== TokenType.Paragraph) throw new Error("expected paragraph");
-    const poisonedInline = para.children.map((c) => ({ ...c, meta: { html: "<script>" } }));
+    const poisonedInline = para.children.map((c) => ({
+      ...c,
+      meta: { attrs: { onclick: "x", class: "ok" } },
+    }));
     const poisoned = [{ ...para, children: poisonedInline }];
     const out = applyPlugins(poisoned as TokensList, [sanitize()]).tokens;
     const outPara = out[0];
     if (outPara?.type !== TokenType.Paragraph) throw new Error("expected paragraph");
     for (const inline of outPara.children) {
-      expect(inline.meta?.html).toBeUndefined();
+      expect(inline.meta?.attrs?.["onclick" as keyof typeof inline.meta.attrs]).toBeUndefined();
+      expect((inline.meta?.attrs as Record<string, string>)?.["class"]).toBe("ok");
     }
   });
 
@@ -309,7 +313,6 @@ describe("sanitize", () => {
     const textOnly = para.children.find((c) => c.type === TokenType.Text);
     if (textOnly?.type !== TokenType.Text) throw new Error("expected text");
     expect(textOnly.content).toBe("caption");
-    // The image itself is gone.
     expect(para.children.find((c) => c.type === TokenType.Image)).toBeUndefined();
   });
 
@@ -324,20 +327,28 @@ describe("sanitize", () => {
   });
 
   it("accepts user-supplied protocols with or without trailing ':'", () => {
-    // Author passed "custom" (no colon) — sanitize should normalize to "custom:".
     const tokens = parse("[x](custom:foo)\n").tokens;
     const out = applyPlugins(tokens, [sanitize({ allowedProtocols: ["custom"] })]).tokens;
     expect(findLink(out).href).toBe("custom:foo");
 
-    // Author passed "custom:" — already ends with ":" → kept verbatim.
     const tokens2 = parse("[x](custom:foo)\n").tokens;
     const out2 = applyPlugins(tokens2, [sanitize({ allowedProtocols: ["custom:"] })]).tokens;
     expect(findLink(out2).href).toBe("custom:foo");
 
-    // Author passed "custom/" — ends with "/" → kept verbatim (scheme with path separator).
     const tokens3 = parse("[x](custom/foo)\n").tokens;
     const out3 = applyPlugins(tokens3, [sanitize({ allowedProtocols: ["custom/"] })]).tokens;
     expect(findLink(out3).href).toBe("custom/foo");
+  });
+
+  it("allows sanitize at any position in the pipeline (order-agnostic)", () => {
+    const tokens = parse("[bad](javascript:x)\n").tokens;
+    const noop = {
+      name: "noop",
+      requires: { tokenSchema: 2 },
+      transform: (t: TokensList) => t,
+    };
+    const out = applyPlugins(tokens, [sanitize(), noop]).tokens;
+    expect(findLink(out).href).toBe("#");
   });
 });
 
@@ -415,6 +426,7 @@ describe("frontmatter", () => {
   });
 });
 
+/** Find the first Link token in a parsed token list. */
 function findLink(tokens: TokensList): LinkToken {
   for (const t of tokens) {
     if (t.type === TokenType.Paragraph) {

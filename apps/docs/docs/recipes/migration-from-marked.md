@@ -114,8 +114,9 @@ For async pre-rendering (syntax highlighting, math), use plugins:
 - [`@streamd/plugin-shiki`](../packages/plugin-shiki) — async factory,
   once at startup. The returned plugin is synchronous. See the
   [Shiki recipe](./shiki-integration).
-- [`@streamd/plugin-katex`](../packages/plugin-katex) — synchronous
-  factory, synchronous transform.
+- Math rendering — supply `components.math_block` /
+  `components.math_inline` overrides that call KaTeX directly. See
+  the [math rendering recipe](./math-rendering).
 
 ## Streaming
 

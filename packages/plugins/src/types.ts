@@ -2,9 +2,9 @@
  * Plugin types and helper shapes.
  *
  * A plugin is a pure token transformer. Plugins run before rendering and may:
- *  - rewrite tokens (e.g. syntax-highlight CodeBlock → HtmlBlock)
+ *  - rewrite tokens (e.g. sanitize unsafe link targets)
  *  - annotate tokens via the `meta` field (e.g. add id="…" to headings)
- *  - drop tokens entirely (e.g. sanitize raw HTML)
+ *  - drop tokens entirely (e.g. remove empty paragraphs)
  *
  * Plugins must be deterministic for a given input — the renderer may invoke
  * them multiple times during streaming as the source grows.
@@ -56,7 +56,7 @@ export interface PluginContext {
  * `kind: "token-schema-mismatch"`.
  */
 export interface Plugin {
-  /** Human-readable identifier used in error messages and the sanitize-last check. */
+  /** Human-readable identifier used in error messages. */
   readonly name: string;
   /** Token transformer. Must be deterministic for a given input. */
   readonly transform: (tokens: TokensList, ctx: PluginContext) => TokensList;
