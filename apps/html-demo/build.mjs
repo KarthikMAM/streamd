@@ -18,6 +18,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderHtml, renderThemeStylesheet } from "@streamd/html";
 import { parse } from "@streamd/parser";
+import { shiki } from "@streamd/plugin-shiki";
 import { darkTheme, lightTheme } from "@streamd/tokens";
 
 /** @type {string} Directory of this script, used as base for all relative path resolution. */
@@ -79,10 +80,75 @@ const htmlBundle = await readTextOrExit(
   "Run `npm run build -w @streamd/html` (or `npm run build` from the repo root) first.",
 );
 
-/** @type {string} Server-side rendered HTML of the sample markdown for initial page load. */
+/**
+ * Shiki plugin instance — annotates CodeBlock tokens with structured
+ * `meta.highlight` (HighlightData) for styled-span rendering.
+ */
+const shikiPlugin = await shiki({
+  langs: ["javascript", "typescript", "bash", "json"],
+  themes: { light: "github-light", dark: "github-dark" },
+});
+
+/** @type {string} Server-side rendered HTML of the sample markdown with Shiki highlighting. */
 const preRendered = renderHtml(parse(sampleMd, null, { gfm: true }).tokens, {
   classPrefix: "streamd",
+  plugins: [shikiPlugin],
 });
+
+/**
+ * Render the sample with a custom `code_block` component override that
+ * wraps code in a header showing the language badge. Demonstrates the
+ * component-override extensibility mechanism.
+ */
+const overrideRendered = renderHtml(parse(sampleMd, null, { gfm: true }).tokens, {
+  classPrefix: "streamd",
+  plugins: [shikiPlugin],
+  components: {
+    code_block: (token, ctx) => {
+      const lang = token.lang || "text";
+      const badge = `<span class="lang-badge">${ctx.escapeHtml(lang)}</span>`;
+      const highlight = token.meta?.highlight;
+      let codeContent;
+      if (highlight) {
+        codeContent = highlight.lines
+          .map((line) =>
+            line
+              .map(
+                (seg) =>
+                  `<span style="color:${seg.color ?? ""}">${ctx.escapeHtml(seg.text)}</span>`,
+              )
+              .join(""),
+          )
+          .join("\n");
+      } else {
+        codeContent = ctx.escapeHtml(token.content);
+      }
+      return `<div class="code-override">${badge}<pre><code>${codeContent}</code></pre></div>`;
+    },
+  },
+});
+
+/**
+ * KaTeX-via-component-override recipe: demonstrates how consumers
+ * supply custom math rendering without plugin-katex. In production,
+ * the override would call `katex.renderToString(token.content)`.
+ * Here we show the pattern with a placeholder.
+ */
+const katexRecipeHtml = `<div class="recipe-box">
+<h3>KaTeX via component override (recipe)</h3>
+<pre><code class="language-javascript">import katex from "katex";
+import { renderHtml } from "@streamd/html";
+import { parse } from "@streamd/parser";
+
+const html = renderHtml(parse(src).tokens, {
+  components: {
+    math_block: (token) =&gt;
+      \`&lt;div class="math-block"&gt;\${katex.renderToString(token.content, { displayMode: true })}&lt;/div&gt;\`,
+    math_inline: (token) =&gt;
+      \`&lt;span class="math-inline"&gt;\${katex.renderToString(token.content)}&lt;/span&gt;\`,
+  },
+});</code></pre>
+</div>`;
 
 /** @type {string} CSS stylesheet for the light theme, scoped to .streamd-root. */
 const lightCss = renderThemeStylesheet(lightTheme);
@@ -108,6 +174,10 @@ const page = `<!doctype html>
   button.active { background: #1f6feb; color: white; border-color: #1f6feb; }
   .streamd-dark { background: #0d1117; color: #e6edf3; }
   .streamd-dark button { background: #30363d; color: #e6edf3; border-color: #30363d; }
+  .code-override { position: relative; margin: 1em 0; }
+  .lang-badge { position: absolute; top: 4px; right: 8px; font-size: 11px; color: #666; background: #eee; padding: 2px 6px; border-radius: 3px; }
+  .recipe-box { background: #f0f4f8; border: 1px solid #d0d7de; border-radius: 8px; padding: 16px; margin: 1em 0; }
+  .recipe-box h3 { margin-top: 0; }
 ${lightCss}
 ${darkCss}
 </style>
@@ -125,6 +195,14 @@ ${darkCss}
   <div id="outer" class="streamd-light">
     <div id="pre-rendered">${preRendered}</div>
   </div>
+  <h2>Component override: custom code block</h2>
+  <p>The same markdown rendered with a <code>components.code_block</code> override
+  that adds a language badge and reads <code>meta.highlight</code> for styled spans.</p>
+  <div id="override-rendered" class="streamd-light">${overrideRendered}</div>
+  <h2>KaTeX via component override</h2>
+  <p>With <code>plugin-katex</code> removed, math rendering is a component-layer concern.
+  Override <code>components.math_block</code> / <code>components.math_inline</code>:</p>
+  ${katexRecipeHtml}
   <h2>Source</h2>
   <pre id="src" style="background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto">${escapeHtml(sampleMd)}</pre>
 </div>
