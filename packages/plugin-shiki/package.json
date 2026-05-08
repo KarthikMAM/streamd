@@ -1,6 +1,6 @@
 {
   "name": "@streamd/plugin-shiki",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Shiki syntax-highlighter adapter for the streamd plugin pipeline",
   "type": "module",
   "main": "./dist/index.cjs",

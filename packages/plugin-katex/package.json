@@ -1,6 +1,6 @@
 {
   "name": "@streamd/plugin-katex",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "KaTeX math-rendering adapter for the streamd plugin pipeline",
   "type": "module",
   "main": "./dist/index.cjs",
