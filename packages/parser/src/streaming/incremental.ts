@@ -213,7 +213,7 @@ function scanActiveRegion(
       while (p > 0 && src.charCodeAt(p - 1) === CC_LF) p--;
       while (p > 0 && src.charCodeAt(p - 1) !== CC_LF) p--;
       while (p > 0) {
-        let pp = p;
+        let pp = p - 1;
         while (pp > 0 && src.charCodeAt(pp - 1) !== CC_LF) pp--;
         const lineStart = pp;
         const ch = src.charCodeAt(lineStart);
