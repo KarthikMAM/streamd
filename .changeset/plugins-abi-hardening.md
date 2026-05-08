@@ -1,5 +1,5 @@
 ---
-"@streamd/plugins": major
+"@streamd/plugins": minor
 ---
 
 Harden the plugin ABI and the `sanitize()` defense-in-depth layer. Four
