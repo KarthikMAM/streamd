@@ -7,6 +7,7 @@
 import { lightTheme } from "@streamd/tokens";
 import { describe, expect, it } from "vitest";
 import { renderThemeStylesheet, streamHtml } from "./streaming";
+import { StreamdHtmlArgumentError } from "./validation";
 
 describe("streamHtml", () => {
   it("renders full source on a one-shot call and returns a usable state", () => {
@@ -54,5 +55,16 @@ describe("renderThemeStylesheet", () => {
     const css = renderThemeStylesheet(lightTheme, { classPrefix: "md" });
     expect(css).toContain(".md-root {");
     expect(css).not.toContain(".streamd-root");
+  });
+});
+
+describe("streamHtml — deprecated options", () => {
+  it("throws StreamdHtmlArgumentError when allowDangerousMetaHtml is passed", () => {
+    expect(() =>
+      streamHtml("# hi\n", null, { allowDangerousMetaHtml: true } as Record<string, unknown>),
+    ).toThrow(StreamdHtmlArgumentError);
+    expect(() =>
+      streamHtml("# hi\n", null, { allowDangerousMetaHtml: true } as Record<string, unknown>),
+    ).toThrow(expect.objectContaining({ kind: "deprecated-option" }));
   });
 });

@@ -4,9 +4,41 @@
  * @module types
  */
 
-import type { TokensList } from "@streamd/parser";
+import type { Token, TokensList, TokenTypeValue } from "@streamd/parser";
 import type { Plugin } from "@streamd/plugins";
-import type { MathRenderMode, TaskListCheckboxMode } from "@streamd/tokens";
+import type { TaskListCheckboxMode } from "@streamd/tokens";
+
+/**
+ * Mapped type that extracts the concrete token interface whose `type`
+ * field matches the given string literal `K`. Enables type-safe
+ * component overrides: `components.heading` receives a `HeadingToken`.
+ */
+export type TokenByType<K extends TokenTypeValue> = Extract<Token, { type: K }>;
+
+/**
+ * Context object passed to component override functions. Provides
+ * escape helpers, class-prefix resolution, and a recursive render
+ * callback so overrides can delegate to the default for children.
+ */
+export interface HtmlRenderContext {
+  /** Escape HTML entities in text content. */
+  readonly escapeHtml: (s: string) => string;
+  /** Escape a value for use inside an HTML attribute. */
+  readonly escapeAttr: (s: string) => string;
+  /** Current CSS class prefix (empty string when disabled). */
+  readonly classPrefix: string;
+  /** Render a child token using the default renderer. */
+  readonly render: (token: Token) => string;
+}
+
+/**
+ * Component override map — one optional function per token type.
+ * Each function receives the typed token and a render context,
+ * and returns an HTML string that replaces the default output.
+ */
+export type HtmlComponents = {
+  readonly [K in TokenTypeValue]?: (token: TokenByType<K>, ctx: HtmlRenderContext) => string;
+};
 
 /** Options controlling HTML emission. */
 export interface RenderHtmlOptions {
@@ -31,35 +63,15 @@ export interface RenderHtmlOptions {
   /**
    * How to render math tokens (`MathInline`, `MathBlock`). Default: `"span-class"`.
    */
-  readonly math?: MathRenderMode;
+  readonly math?: "span-class" | "tex-delim" | "none";
   /** Plugins applied to the token tree before rendering. Runs in order. */
   readonly plugins?: ReadonlyArray<Plugin>;
   /**
-   * Opt in to honouring the `token.meta.html` passthrough that plugins may
-   * attach (e.g. `@streamd/plugins`' `highlightCode` builtin emits a
-   * pre-rendered `<pre>` string there). Default: `false`.
-   *
-   * # Security
-   *
-   * When `false` (the default), renderers IGNORE `meta.html` entirely and
-   * render the token normally. Setting this to `true` causes the renderer
-   * to splice `meta.html` verbatim into the output — no further escaping,
-   * no validation. Anything a plugin writes into `meta.html` is trusted
-   * to be well-formed, safe HTML.
-   *
-   * `sanitize()` from `@streamd/plugins` does NOT walk `token.meta`. That
-   * means a plugin (third-party or in-house) that sets
-   * `meta.html = "<script>…"` bypasses the sanitizer entirely. Only enable
-   * this flag when you control every plugin in the `plugins` pipeline and
-   * have verified that each plugin produces safe HTML output (e.g. a
-   * syntax highlighter that emits only `<span>` / `<code>` elements with
-   * escaped text content).
-   *
-   * Leaving this flag `false` is the safe default for any caller that
-   * accepts plugins from external configuration or runs plugins authored
-   * outside the trust boundary.
+   * Component override map. Each key is a token type string; the value
+   * is a function `(token, ctx) => string` that replaces the default
+   * renderer for that token type.
    */
-  readonly allowDangerousMetaHtml?: boolean;
+  readonly components?: HtmlComponents;
 }
 
 /** Public signature for the top-level render entry point. */

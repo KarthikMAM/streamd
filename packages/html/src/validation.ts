@@ -16,6 +16,16 @@ import { htmlErrorMessage } from "./messages";
 const SOURCE = "@streamd/html";
 
 /**
+ * Discriminator identifying the category of argument violation.
+ * Each kind maps to a distinct error scenario at the public API boundary.
+ */
+export type StreamdHtmlArgumentErrorKind =
+  | "tokens-not-array"
+  | "source-not-string"
+  | "unknown-token-type"
+  | "deprecated-option";
+
+/**
  * Error thrown when a `@streamd/html` public-API argument violates its
  * contract. Extends the shared `StreamdArgumentError` so callers can
  * write a single `catch` that covers every package.
@@ -35,7 +45,7 @@ export class StreamdHtmlArgumentError extends StreamdArgumentError {
 /** Fields accepted by the `StreamdHtmlArgumentError` constructor. */
 export interface StreamdHtmlArgumentErrorFields {
   /** Discriminator identifying the category of argument violation. */
-  readonly kind: "tokens-not-array" | "source-not-string" | "unknown-token-type";
+  readonly kind: StreamdHtmlArgumentErrorKind;
   /** Name of the public API function that detected the violation. */
   readonly caller: string;
   /** Human-readable error message describing what went wrong. */
@@ -73,4 +83,23 @@ export function assertString(source: unknown, caller: string): asserts source is
     caller,
     message: htmlErrorMessage.sourceNotString(caller, describeArgumentType(source)),
   });
+}
+
+/**
+ * Throws if a removed option is present in the options object.
+ * Used as a migration signal for consumers still passing deprecated fields.
+ *
+ * @param opts - Raw options object from the caller.
+ * @param caller - Name of the public API function for diagnostics.
+ * @throws {StreamdHtmlArgumentError} With kind `"deprecated-option"`.
+ */
+export function rejectDeprecatedOptions(opts: unknown, caller: string): void {
+  if (opts === null || opts === undefined || typeof opts !== "object") return;
+  if ("allowDangerousMetaHtml" in opts) {
+    throw new StreamdHtmlArgumentError({
+      kind: "deprecated-option",
+      caller,
+      message: htmlErrorMessage.deprecatedOption(caller, "allowDangerousMetaHtml"),
+    });
+  }
 }

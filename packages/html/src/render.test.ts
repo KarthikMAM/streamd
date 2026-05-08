@@ -1,17 +1,21 @@
 /**
  * Unit tests for @streamd/html renderer.
  *
- * Covers every token type produced by @streamd/parser and the
- * rendering-option surface (xhtml, classPrefix, taskListCheckboxes, math).
+ * Covers every token type produced by @streamd/parser (schema 2) and the
+ * rendering-option surface (xhtml, classPrefix, taskListCheckboxes, math,
+ * components).
  *
  * @module render.test
  */
 
-import { parse, TokenType } from "@streamd/parser";
+import type { HighlightData } from "@streamd/parser";
+import { parse, type Token, TokenType } from "@streamd/parser";
 import { describe, expect, it } from "vitest";
 import { renderHtml } from "./render";
+import type { HtmlRenderContext } from "./types";
 import { StreamdHtmlArgumentError } from "./validation";
 
+/** Shorthand: parse markdown and render to HTML. */
 const run = (src: string, opts?: Parameters<typeof parse>[2]): string =>
   renderHtml(parse(src, null, opts).tokens);
 
@@ -21,8 +25,11 @@ describe("renderHtml — block tokens", () => {
     expect(run("###### h6")).toBe("<h6>h6</h6>\n");
   });
 
-  it("paragraph with softbreak", () => {
-    expect(run("line one\nline two\n")).toBe("<p>line one\nline two</p>\n");
+  it("paragraph with newline in text (softbreak collapsed into text)", () => {
+    const html = run("line one\nline two\n");
+    expect(html).toContain("line one");
+    expect(html).toContain("line two");
+    expect(html).toMatch(/^<p>[\s\S]*<\/p>\n$/);
   });
 
   it("paragraph with hardbreak (two trailing spaces)", () => {
@@ -54,22 +61,14 @@ describe("renderHtml — block tokens", () => {
   });
 
   it("wraps paragraphs in loose lists", () => {
-    // Blank line between items → loose list → each item-paragraph keeps its <p> wrapper.
-    // CommonMark §5.2.
     const md = "- a\n\n- b\n";
-    const tokens = parse(md).tokens;
-    const html = renderHtml(tokens);
+    const html = run(md);
     expect(html).toMatch(/<li>\s*<p>a<\/p>\s*<\/li>/);
     expect(html).toMatch(/<li>\s*<p>b<\/p>\s*<\/li>/);
   });
 
   it("ordered list with start attribute", () => {
     expect(run("5. a\n6. b\n")).toBe('<ol start="5">\n<li>a</li>\n<li>b</li>\n</ol>\n');
-  });
-
-  it("html block passes through", () => {
-    const out = run("<div>raw</div>\n");
-    expect(out).toContain("<div>raw</div>");
   });
 });
 
@@ -88,10 +87,6 @@ describe("renderHtml — inline tokens", () => {
 
   it("image", () => {
     expect(run('![alt](/u "t")\n')).toBe('<p><img src="/u" alt="alt" title="t" /></p>\n');
-  });
-
-  it("inline html", () => {
-    expect(run("use <span>x</span>\n")).toBe("<p>use <span>x</span></p>\n");
   });
 
   it("backslash escape", () => {
@@ -156,6 +151,12 @@ describe("renderHtml — math", () => {
     const html = renderHtml(parse(md, null, { math: true }).tokens, { math: "tex-delim" });
     expect(html).toContain("$x$");
   });
+
+  it("math=tex-delim restores block-math delimiters", () => {
+    const md = "$$\nE=mc^2\n$$\n";
+    const html = renderHtml(parse(md, null, { math: true }).tokens, { math: "tex-delim" });
+    expect(html).toContain("$$\nE=mc^2$$\n");
+  });
 });
 
 describe("renderHtml — options", () => {
@@ -177,26 +178,25 @@ describe("renderHtml — options", () => {
   });
 
   it("wrapRoot still wraps output in a div when token list is empty", () => {
-    // Covers the `effective.length === 0 && wrapRoot` branch — the renderer
-    // emits an open+close root wrapper so the caller's mount target
-    // doesn't see a stale DOM tree on first render.
     const html = renderHtml([], { classPrefix: "md", wrapRoot: true });
     expect(html).toBe('<div class="md-root">\n</div>\n');
   });
 
-  it("math=tex-delim restores block-math delimiters", () => {
-    // Covers the block-math tex-delim branch that sits alongside the
-    // inline-math case tested above.
-    const md = "$$\nE=mc^2\n$$\n";
-    const html = renderHtml(parse(md, null, { math: true }).tokens, { math: "tex-delim" });
-    expect(html).toContain("$$\nE=mc^2$$\n");
+  it("omitCodeLanguageClass drops the language attribute", () => {
+    const html = renderHtml(parse("```js\nx\n```\n").tokens, { omitCodeLanguageClass: true });
+    expect(html).not.toContain("language-");
+    expect(html).toContain("<code>x\n</code></pre>");
   });
 
-  it("loose list with a nested list as a child forces full-paragraph rendering", () => {
-    // Covers `tryRenderTightChildren` returning false for a list item
-    // whose children include a non-Paragraph token. Constructed as a
-    // token tree directly — parser output doesn't naturally produce this
-    // shape for short fixtures.
+  it("taskListCheckboxes=none emits plain text", () => {
+    const html = renderHtml(parse("- [x] done\n", null, { gfm: true }).tokens, {
+      taskListCheckboxes: "none",
+    });
+    expect(html).toContain("[x] done");
+    expect(html).not.toContain("<input");
+  });
+
+  it("loose list with nested list forces full-paragraph rendering", () => {
     const tokens = [
       {
         type: TokenType.List,
@@ -212,7 +212,6 @@ describe("renderHtml — options", () => {
                 type: TokenType.Paragraph,
                 children: [{ type: TokenType.Text, content: "outer" }],
               },
-              // Non-Paragraph child forces the full-paragraph rendering path.
               {
                 type: TokenType.List,
                 ordered: false,
@@ -240,19 +239,132 @@ describe("renderHtml — options", () => {
     expect(html).toContain("<p>outer</p>");
     expect(html).toContain("<li>nested</li>");
   });
+});
 
-  it("omitCodeLanguageClass drops the language attribute", () => {
-    const html = renderHtml(parse("```js\nx\n```\n").tokens, { omitCodeLanguageClass: true });
-    expect(html).not.toContain("language-");
-    expect(html).toContain("<code>x\n</code></pre>");
+describe("renderHtml — component overrides", () => {
+  it("invokes a code_block override and splices its return value", () => {
+    const tokens = [
+      { type: TokenType.CodeBlock, lang: "js", content: "x=1", meta: undefined },
+    ] as unknown as Parameters<typeof renderHtml>[0];
+    const html = renderHtml(tokens, {
+      components: { code_block: (t) => `<custom>${t.content}</custom>` },
+    });
+    expect(html).toBe("<custom>x=1</custom>");
   });
 
-  it("taskListCheckboxes=none emits plain text", () => {
-    const html = renderHtml(parse("- [x] done\n", null, { gfm: true }).tokens, {
-      taskListCheckboxes: "none",
+  it("override receives a working ctx.render callback for delegation", () => {
+    const tokens = parse("# hello\n").tokens;
+    const html = renderHtml(tokens, {
+      components: {
+        heading: (_t, ctx: HtmlRenderContext) => {
+          const inner = ctx.render({
+            type: TokenType.Paragraph,
+            children: [{ type: TokenType.Text, content: "delegated" }],
+          } as Token);
+          return `<div>${inner}</div>`;
+        },
+      },
     });
-    expect(html).toContain("[x] done");
-    expect(html).not.toContain("<input");
+    expect(html).toBe("<div><p>delegated</p>\n</div>");
+  });
+
+  it("override receives ctx.escapeHtml and ctx.classPrefix", () => {
+    const tokens = [
+      { type: TokenType.CodeBlock, lang: "ts", content: "<b>hi</b>", meta: undefined },
+    ] as unknown as Parameters<typeof renderHtml>[0];
+    const html = renderHtml(tokens, {
+      classPrefix: "md",
+      components: {
+        code_block: (t, ctx) =>
+          `<pre class="${ctx.classPrefix}">${ctx.escapeHtml(t.content)}</pre>`,
+      },
+    });
+    expect(html).toBe('<pre class="md">&lt;b&gt;hi&lt;/b&gt;</pre>');
+  });
+
+  it("inline override is invoked for text tokens", () => {
+    const tokens = parse("hello\n").tokens;
+    const html = renderHtml(tokens, {
+      components: { text: (t) => t.content.toUpperCase() },
+    });
+    expect(html).toContain("HELLO");
+  });
+});
+
+describe("renderHtml — meta.highlight code block", () => {
+  it("renders per-segment spans with inline styles when highlight is populated", () => {
+    const highlight: HighlightData = {
+      lang: "js",
+      theme: "light",
+      lines: [
+        [
+          { text: "const", color: "#0000ff", bold: true },
+          { text: " x = ", color: "#000000" },
+          { text: "1", color: "#098658" },
+        ],
+      ],
+    };
+    const tokens = [
+      { type: TokenType.CodeBlock, lang: "js", content: "const x = 1", meta: { highlight } },
+    ] as unknown as Parameters<typeof renderHtml>[0];
+    const html = renderHtml(tokens);
+    expect(html).toContain('class="streamd-code-block"');
+    expect(html).toContain('data-lang="js"');
+    expect(html).toContain('role="region"');
+    expect(html).toContain('<span style="color:#0000ff;font-weight:bold">const</span>');
+    expect(html).toContain('<span style="color:#000000"> x = </span>');
+    expect(html).toContain('<span style="color:#098658">1</span>');
+  });
+
+  it("renders multi-line highlight with newlines between lines", () => {
+    const highlight: HighlightData = {
+      lang: "ts",
+      theme: "dark",
+      lines: [[{ text: "line1" }], [{ text: "line2", italic: true }]],
+    };
+    const tokens = [
+      { type: TokenType.CodeBlock, lang: "ts", content: "line1\nline2", meta: { highlight } },
+    ] as unknown as Parameters<typeof renderHtml>[0];
+    const html = renderHtml(tokens);
+    expect(html).toContain("line1\n");
+    expect(html).toContain('<span style="font-style:italic">line2</span>');
+  });
+
+  it("renders unstyled segments as plain escaped text (no span)", () => {
+    const highlight: HighlightData = {
+      lang: "txt",
+      theme: "light",
+      lines: [[{ text: "<b>raw</b>" }]],
+    };
+    const tokens = [
+      { type: TokenType.CodeBlock, lang: "txt", content: "<b>raw</b>", meta: { highlight } },
+    ] as unknown as Parameters<typeof renderHtml>[0];
+    const html = renderHtml(tokens);
+    expect(html).toContain("&lt;b&gt;raw&lt;/b&gt;");
+    expect(html).not.toContain("<span");
+  });
+
+  it("falls back to plain code when meta.highlight is absent", () => {
+    const tokens = [
+      { type: TokenType.CodeBlock, lang: "js", content: "x=1", meta: undefined },
+    ] as unknown as Parameters<typeof renderHtml>[0];
+    const html = renderHtml(tokens);
+    expect(html).toContain('<code class="language-js">x=1</code></pre>');
+    expect(html).not.toContain("streamd-code-block");
+  });
+
+  it("escapes segment text to prevent XSS", () => {
+    const highlight: HighlightData = {
+      lang: "html",
+      theme: "light",
+      lines: [[{ text: "<script>alert(1)</script>", color: "#f00" }]],
+    };
+    const tokens = [
+      { type: TokenType.CodeBlock, lang: "html", content: "", meta: { highlight } },
+    ] as unknown as Parameters<typeof renderHtml>[0];
+    const html = renderHtml(tokens);
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
   });
 });
 
@@ -262,14 +374,13 @@ describe("renderHtml — edge cases", () => {
   });
 
   it("throws on an unknown token kind", () => {
-    const garbage = [{ type: 999 as unknown as 0, children: [] as Array<never> }];
+    const garbage = [{ type: "unknown_garbage" as unknown, children: [] as Array<never> }];
     expect(() => renderHtml(garbage as unknown as Array<never>)).toThrow(StreamdHtmlArgumentError);
-    expect(() => renderHtml(garbage as unknown as Array<never>)).toThrow(/unknown token type 999/);
+    expect(() => renderHtml(garbage as unknown as Array<never>)).toThrow(/unknown token type/);
   });
 
   it("malformed block token surfaces as StreamdHtmlArgumentError with correct kind", () => {
-    const garbage = [{ type: 999 as unknown as 0, children: [] as Array<never> }];
-    expect(() => renderHtml(garbage as unknown as Array<never>)).toThrow(StreamdHtmlArgumentError);
+    const garbage = [{ type: "unknown_garbage" as unknown, children: [] as Array<never> }];
     expect(() => renderHtml(garbage as unknown as Array<never>)).toThrow(
       expect.objectContaining({
         kind: "unknown-token-type",

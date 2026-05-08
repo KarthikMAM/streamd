@@ -2,68 +2,54 @@
  * HTML renderer — converts a streamd token tree into HTML.
  *
  * Plugin-aware: if `plugins` is supplied, tokens are passed through
- * `applyPlugins` before rendering, and each token's optional `meta`
- * field (id, className, rel, target, attrs) is honoured against a
- * strict safety allowlist.
+ * `applyPlugins` before rendering. Each token's optional `meta` field
+ * (id, className, rel, target, attrs) is honoured against a strict
+ * safety allowlist.
  *
- * # `meta.html` passthrough is opt-in
+ * # Component overrides
  *
- * Plugins may attach a pre-rendered HTML string to `token.meta.html`
- * (`@streamd/plugins`' `highlightCode` builtin does this for code
- * blocks). The renderer only splices that string into the output when
- * the caller explicitly passes `allowDangerousMetaHtml: true`. By
- * default the field is ignored and the token is rendered normally.
- *
- * `sanitize()` from `@streamd/plugins` does NOT walk `meta`; enabling
- * the flag trusts every plugin in the pipeline to produce safe HTML.
- * See `RenderHtmlOptions.allowDangerousMetaHtml` for the full contract.
+ * Consumers pass `components: { code_block: fn, ... }` to replace the
+ * default renderer for any token type. The override receives the typed
+ * token and an `HtmlRenderContext` with escape helpers and a recursive
+ * `render` callback.
  *
  * # `meta.attrs` safety allowlist
  *
  * Arbitrary attributes injected through `meta.attrs` are filtered by
  * {@link isSafeAttributeName}: event handlers (`on*`), unknown names,
- * and names containing tag-breakout characters are dropped. `href` and
- * `src` values are re-written through a scheme check + `normalizeUrl`
- * so an attacker-controlled plugin cannot emit a `javascript:` URL.
- *
- * # Performance
- *
- * All output is accumulated into a string `Array<string>` and joined
- * once at the end — this is substantially faster than repeated `+=`
- * in V8 because it avoids the `ConsString` flatten on every concat.
- * Attribute strings for the top-level class name are cached per
- * `classPrefix`.
+ * and names containing tag-breakout characters are dropped.
  *
  * @module render
  */
 
-import {
-  type BlockquoteToken,
-  type CodeBlockToken,
-  type EmToken,
-  type HeadingToken,
-  type ImageToken,
-  type InlineToken,
-  type LinkToken,
-  type ListItemToken,
-  type ListToken,
-  type MathBlockToken,
-  type MathInlineToken,
-  type ParagraphToken,
-  type StrikethroughToken,
-  type StrongToken,
-  type TableToken,
-  type TextToken,
-  type Token,
-  type TokenMeta,
-  type TokensList,
-  TokenType,
+import type {
+  BlockquoteToken,
+  CodeBlockToken,
+  EmToken,
+  HeadingToken,
+  HighlightData,
+  ImageToken,
+  InlineToken,
+  LinkToken,
+  ListItemToken,
+  ListToken,
+  MathBlockToken,
+  MathInlineToken,
+  ParagraphToken,
+  StrikethroughToken,
+  StrongToken,
+  TableToken,
+  TextToken,
+  ThemedSegment,
+  Token,
+  TokenMeta,
+  TokensList,
 } from "@streamd/parser";
 import { applyPlugins, type Plugin } from "@streamd/plugins";
 import { decodeEntities, escapeAttr, escapeHtml, normalizeUrl } from "./escape";
 import { htmlErrorMessage } from "./messages";
-import type { RenderHtmlOptions } from "./types";
-import { assertTokenList, StreamdHtmlArgumentError } from "./validation";
+import type { HtmlComponents, HtmlRenderContext, RenderHtmlOptions } from "./types";
+import { assertTokenList, rejectDeprecatedOptions, StreamdHtmlArgumentError } from "./validation";
 
 /**
  * ASCII space character code (0x20). Used for stripping trailing spaces
@@ -72,77 +58,29 @@ import { assertTokenList, StreamdHtmlArgumentError } from "./validation";
 const CC_SPACE = 32;
 
 /**
- * Exhaustiveness helper for the renderer dispatch switches — throws on
- * unknown token kinds so a malformed token tree surfaces at the rendering
- * site instead of silently dropping content.
- *
- * Routes through `StreamdHtmlArgumentError` with `kind: "unknown-token-type"`
- * so consumers can write a single `instanceof StreamdArgumentError` catch
- * across every `@streamd/*` package rather than matching against an
- * anonymous `Error` subclass.
- *
- * The argument type is `Token` rather than `never` because the renderer's
- * block / inline dispatches narrow the union asymmetrically; the runtime
- * check is what matters.
- *
- * @param token - The token with an unrecognised `type` discriminator.
- * @param context - Name of the dispatch site (e.g. `"renderBlock"`) used
- *   in the error message to locate which switch failed exhaustiveness.
- * @throws {StreamdHtmlArgumentError} Always — with kind `"unknown-token-type"`.
- */
-function unreachableToken(token: Token, context: string): never {
-  const kind = String(token.type);
-  throw new StreamdHtmlArgumentError({
-    kind: "unknown-token-type",
-    caller: context,
-    message: htmlErrorMessage.unknownTokenType(context, kind),
-  });
-}
-
-/**
  * Fully resolved renderer options passed to every internal render helper.
- * Produced once by {@link renderHtml} from a caller-supplied `HtmlOptions`;
+ * Produced once by {@link renderHtml} from caller-supplied options;
  * kept frozen-shaped for monomorphic access in the dispatch loops.
  */
 interface ResolvedOptions {
-  /** Whether to suppress the `language-*` class on fenced code blocks. */
   readonly omitCodeLanguageClass: boolean;
-  /** Whether to emit XHTML-style void-element closing (`<br />`). */
   readonly xhtml: boolean;
-  /** CSS class prefix applied to block-level tags (empty string = disabled). */
   readonly classPrefix: string;
-  /** Pre-computed flag: true when `classPrefix` is non-empty. */
   readonly hasClassPrefix: boolean;
-  /** Whether to wrap output in a `<div class="<prefix>-root">` container. */
   readonly wrapRoot: boolean;
-  /** Task-list checkbox rendering mode: "disabled" emits `<input>`, "none" emits text. */
   readonly taskListCheckboxes: "disabled" | "none";
-  /** Math rendering mode: "span-class" wraps in `<code>`, "tex-delim" uses `$`, "none" suppresses. */
   readonly math: "span-class" | "tex-delim" | "none";
-  /** Pre-computed void-element closing string: `" />"` for XHTML, `">"` for HTML5. */
   readonly voidClose: string;
-  /** Whether to honour `token.meta.html` passthrough from plugins. */
-  readonly allowDangerousMetaHtml: boolean;
+  readonly components: HtmlComponents | undefined;
 }
 
 /**
  * Cache of pre-built ` class="<prefix>-<kind>"` attribute strings.
- *
- * Keyed by `"prefix:kind"`. Avoids repeated string concatenation and
- * `escapeAttr` calls for the same class attribute across render passes.
- * Grows monotonically — never cleared, since the set of (prefix, kind)
- * pairs is small and fixed per application.
+ * Keyed by `"prefix:kind"`. Grows monotonically.
  */
 const ATTR_CACHE = new Map<string, string>();
 
-/**
- * Attribute names always safe to echo through `meta.attrs` — every entry
- * is a presentational or accessibility attribute with no executable
- * side-effects. `class` and `id` are in the set so {@link isSafeAttributeName}
- * approves them, but the emission path still routes them through the
- * dedicated class / id branches in {@link elementAttrs} to avoid
- * double-emission.
- */
+/** Attribute names always safe to echo through `meta.attrs`. */
 const SAFE_ATTR_ALLOWLIST: ReadonlySet<string> = new Set([
   "class",
   "id",
@@ -155,42 +93,35 @@ const SAFE_ATTR_ALLOWLIST: ReadonlySet<string> = new Set([
   "src",
 ]);
 
-/**
- * Matches strictly-lowercase `data-*` and `aria-*` custom-attribute names.
- * First char after the prefix must be a letter; subsequent chars are
- * letters, digits, or hyphens. Mirrors the HTML spec requirement that
- * `data-*` / `aria-*` names be XML-compatible and lowercase in the
- * author-written source.
- */
+/** Matches strictly-lowercase `data-*` and `aria-*` custom-attribute names. */
 const SAFE_DATA_ARIA_RE = /^(?:data|aria)-[a-z][a-z0-9-]*$/;
 
-/**
- * Matches attribute-name character sets that cannot escape an opening tag:
- * ASCII letters, digits, hyphens, and underscores only. Anything outside
- * this set (`"`, `'`, `>`, `<`, `/`, whitespace, etc.) is rejected before
- * the allowlist check so we never emit a key containing tag-breakout bytes.
- */
+/** Matches safe attribute-name character sets (no tag-breakout bytes). */
 const SAFE_ATTR_NAME_RE = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
 
-/**
- * Schemes that are always unsafe in `href` / `src` values when the
- * attribute originates from `meta.attrs`. A plugin-authored URL that uses
- * any of these schemes is rewritten to the `"#"` fallback before emission.
- */
+/** Schemes that are always unsafe in `href` / `src` values from `meta.attrs`. */
 const UNSAFE_URL_SCHEMES: ReadonlyArray<string> = ["javascript:", "vbscript:", "data:", "file:"];
+
+/**
+ * Exhaustiveness helper — throws on unknown token kinds.
+ *
+ * @param token - The token with an unrecognised `type` discriminator.
+ * @param context - Name of the dispatch site for the error message.
+ * @throws {StreamdHtmlArgumentError} Always — with kind `"unknown-token-type"`.
+ */
+function unreachableToken(token: Token, context: string): never {
+  const kind = String(token.type);
+  throw new StreamdHtmlArgumentError({
+    kind: "unknown-token-type",
+    caller: context,
+    message: htmlErrorMessage.unknownTokenType(context, kind),
+  });
+}
 
 /**
  * Predicate: is `name` safe to emit as an attribute key in HTML output?
  *
- * Rejects event-handler attributes (anything whose lower-cased name
- * starts with `on`), any name containing a tag-breakout character such
- * as `"`, `>`, or whitespace, and any name not on the presentational
- * allowlist or the `data-*` / `aria-*` pattern. Callers must still
- * route `class` and `id` through their dedicated emission paths even
- * though this predicate accepts them.
- *
- * @param name - Raw attribute name from `token.meta.attrs`. Any runtime
- *   type is tolerated; non-strings return `false`.
+ * @param name - Raw attribute name from `token.meta.attrs`.
  * @returns `true` when the name is safe; `false` when it must be dropped.
  */
 function isSafeAttributeName(name: string): boolean {
@@ -207,14 +138,7 @@ function isSafeAttributeName(name: string): boolean {
 /**
  * Sanitize a URL value coming from `meta.attrs.href` or `meta.attrs.src`.
  *
- * Rejects URLs whose leading scheme (whitespace-trimmed, case-insensitive)
- * matches any entry in {@link UNSAFE_URL_SCHEMES} and returns `"#"` in
- * their place — the same convention used by the `sanitize()` plugin.
- * Safe URLs are percent-encoded via {@link normalizeUrl} exactly as
- * built-in link/image rendering does.
- *
- * @param url - Raw URL string from `meta.attrs`. Non-string values are
- *   coerced to empty.
+ * @param url - Raw URL string from `meta.attrs`.
  * @returns A normalized URL safe to splice into a quoted attribute value.
  */
 function safeAttrUrl(url: string): string {
@@ -231,13 +155,9 @@ function safeAttrUrl(url: string): string {
 /**
  * Returns a cached ` class="<prefix>-<kind>"` attribute string.
  *
- * Looks up the cache by "prefix:kind" key. On miss, builds the attribute
- * string, stores it, and returns it. Returns empty string when no class
- * prefix is configured.
- *
  * @param opts - Resolved rendering options containing the class prefix.
- * @param kind - Element kind suffix appended to the prefix (e.g. "p", "h1").
- * @returns The pre-built class attribute string, or empty string if no prefix.
+ * @param kind - Element kind suffix appended to the prefix.
+ * @returns The pre-built class attribute string, or empty string.
  */
 function classAttrCached(opts: ResolvedOptions, kind: string): string {
   if (!opts.hasClassPrefix) return "";
@@ -250,93 +170,12 @@ function classAttrCached(opts: ResolvedOptions, kind: string): string {
 }
 
 /**
- * Render a token tree to an HTML string.
- *
- * Stable output for matching CommonMark / GFM reference fixtures
- * after minification (whitespace-tolerant comparison is recommended).
- *
- * @param tokens - Block-level token list produced by `parse()`. Must be
- *   an array — any other type throws `StreamdHtmlArgumentError`.
- * @param options - Optional rendering overrides. Pass `plugins` to apply
- *   token transforms (see `@streamd/plugins`).
- * @returns HTML string. Empty input yields an empty string.
- * @throws StreamdHtmlArgumentError when `tokens` is not an array.
- */
-export function renderHtml(tokens: TokensList, options: RenderHtmlOptions = {}): string {
-  assertTokenList(tokens, "renderHtml");
-
-  const opts = resolveOptions(options);
-  const effective =
-    options.plugins && options.plugins.length > 0
-      ? applyPlugins(tokens, options.plugins as ReadonlyArray<Plugin>).tokens
-      : tokens;
-
-  if (effective.length === 0) return opts.wrapRoot ? openRoot(opts) + closeRoot() : "";
-
-  const out: Array<string> = opts.wrapRoot ? [openRoot(opts)] : [];
-  renderBlocks(effective, opts, out);
-  if (opts.wrapRoot) out.push(closeRoot());
-  return out.join("");
-}
-
-/**
- * Normalizes user-supplied render options into a fully resolved config.
- *
- * Applies defaults for every optional field so downstream renderers can
- * read properties without null checks.
- *
- * @param o - User-supplied partial options from `renderHtml`.
- * @returns Fully resolved options with all defaults applied.
- */
-function resolveOptions(o: RenderHtmlOptions): ResolvedOptions {
-  const prefix = o.classPrefix ?? "";
-  const xhtml = o.xhtml ?? true;
-  return {
-    omitCodeLanguageClass: o.omitCodeLanguageClass ?? false,
-    xhtml,
-    classPrefix: prefix,
-    hasClassPrefix: prefix.length > 0,
-    wrapRoot: o.wrapRoot === true && prefix.length > 0,
-    taskListCheckboxes: o.taskListCheckboxes ?? "disabled",
-    math: o.math ?? "span-class",
-    voidClose: xhtml ? " />" : ">",
-    allowDangerousMetaHtml: o.allowDangerousMetaHtml ?? false,
-  };
-}
-
-/**
- * Produces the opening `<div>` tag for the root wrapper element.
- *
- * @param opts - Resolved options containing the class prefix for the root class.
- * @returns Opening div tag string with the root class attribute.
- */
-function openRoot(opts: ResolvedOptions): string {
-  return `<div class="${escapeAttr(`${opts.classPrefix}-root`)}">\n`;
-}
-
-/**
- * Produces the closing `</div>` tag for the root wrapper element.
- *
- * @returns Closing div tag string with trailing newline.
- */
-function closeRoot(): string {
-  return "</div>\n";
-}
-
-/**
  * Compose the full attribute string for a block or inline element.
  *
- * Merges the class-prefix class, any extra class (e.g. language class on
- * code blocks), and meta-supplied `className`, `id`, and safe `attrs` into
- * a single attribute fragment ready to splice after the tag name.
- *
- * When no meta is present and no extra class is needed, delegates to the
- * cached fast path via {@link classAttrCached}.
- *
- * @param opts - Resolved rendering options containing the class prefix.
- * @param kind - Element kind suffix (e.g. "p", "h1", "blockquote").
- * @param meta - Optional token metadata carrying className, id, and attrs.
- * @param extraClass - Optional additional class name to merge (e.g. language class).
+ * @param opts - Resolved rendering options.
+ * @param kind - Element kind suffix (e.g. "p", "h1").
+ * @param meta - Optional token metadata.
+ * @param extraClass - Optional additional class name to merge.
  * @returns Attribute string fragment starting with a space, or empty string.
  */
 function elementAttrs(
@@ -364,17 +203,8 @@ function elementAttrs(
 /**
  * Append validated `meta.attrs` entries onto the outgoing attribute parts.
  *
- * Every key is screened through {@link isSafeAttributeName}; `class` and
- * `id` are routed via their dedicated paths in {@link elementAttrs} and so
- * are skipped here to avoid double emission. `href` and `src` values run
- * through {@link safeAttrUrl} so attacker-controlled plugins cannot emit a
- * `javascript:` URL into the output tag. All accepted values are still
- * HTML-attribute-escaped by {@link escapeAttr} before concatenation.
- *
- * @param attrs - Raw `meta.attrs` map from the token. Treated as untrusted
- *   input regardless of the plugin that produced it.
- * @param parts - Accumulator array of attribute fragments being assembled
- *   by {@link elementAttrs}; this function only appends.
+ * @param attrs - Raw `meta.attrs` map from the token.
+ * @param parts - Accumulator array of attribute fragments.
  */
 function appendSafeMetaAttrs(attrs: Readonly<Record<string, string>>, parts: Array<string>): void {
   for (const key of Object.keys(attrs)) {
@@ -392,7 +222,94 @@ function appendSafeMetaAttrs(attrs: Readonly<Record<string, string>>, parts: Arr
 }
 
 /**
- * Renders a sequence of block-level tokens by dispatching each to `renderBlock`.
+ * Render a token tree to an HTML string.
+ *
+ * @param tokens - Block-level token list produced by `parse()`.
+ * @param options - Optional rendering overrides.
+ * @returns HTML string. Empty input yields an empty string.
+ * @throws StreamdHtmlArgumentError when `tokens` is not an array or
+ *   a deprecated option is passed.
+ */
+export function renderHtml(tokens: TokensList, options: RenderHtmlOptions = {}): string {
+  assertTokenList(tokens, "renderHtml");
+  rejectDeprecatedOptions(options, "renderHtml");
+
+  const opts = resolveOptions(options);
+  const effective =
+    options.plugins && options.plugins.length > 0
+      ? applyPlugins(tokens, options.plugins as ReadonlyArray<Plugin>).tokens
+      : tokens;
+
+  if (effective.length === 0) return opts.wrapRoot ? openRoot(opts) + closeRoot() : "";
+
+  const out: Array<string> = opts.wrapRoot ? [openRoot(opts)] : [];
+  renderBlocks(effective, opts, out);
+  if (opts.wrapRoot) out.push(closeRoot());
+  return out.join("");
+}
+
+/**
+ * Normalizes user-supplied render options into a fully resolved config.
+ *
+ * @param o - User-supplied partial options from `renderHtml`.
+ * @returns Fully resolved options with all defaults applied.
+ */
+function resolveOptions(o: RenderHtmlOptions): ResolvedOptions {
+  const prefix = o.classPrefix ?? "";
+  const xhtml = o.xhtml ?? true;
+  return {
+    omitCodeLanguageClass: o.omitCodeLanguageClass ?? false,
+    xhtml,
+    classPrefix: prefix,
+    hasClassPrefix: prefix.length > 0,
+    wrapRoot: o.wrapRoot === true && prefix.length > 0,
+    taskListCheckboxes: o.taskListCheckboxes ?? "disabled",
+    math: o.math ?? "span-class",
+    voidClose: xhtml ? " />" : ">",
+    components: o.components,
+  };
+}
+
+/**
+ * Builds an `HtmlRenderContext` for component overrides.
+ *
+ * @param opts - Resolved rendering options.
+ * @returns Context object with escape helpers and recursive render.
+ */
+function buildContext(opts: ResolvedOptions): HtmlRenderContext {
+  return {
+    escapeHtml,
+    escapeAttr,
+    classPrefix: opts.classPrefix,
+    render: (token: Token) => {
+      const out: Array<string> = [];
+      renderBlock(token, opts, out);
+      return out.join("");
+    },
+  };
+}
+
+/**
+ * Produces the opening `<div>` tag for the root wrapper element.
+ *
+ * @param opts - Resolved options containing the class prefix.
+ * @returns Opening div tag string with the root class attribute.
+ */
+function openRoot(opts: ResolvedOptions): string {
+  return `<div class="${escapeAttr(`${opts.classPrefix}-root`)}">\n`;
+}
+
+/**
+ * Produces the closing `</div>` tag for the root wrapper element.
+ *
+ * @returns Closing div tag string with trailing newline.
+ */
+function closeRoot(): string {
+  return "</div>\n";
+}
+
+/**
+ * Renders a sequence of block-level tokens.
  *
  * @param tokens - Array of block-level tokens to render.
  * @param opts - Resolved rendering options.
@@ -408,56 +325,47 @@ function renderBlocks(
 
 /**
  * Dispatches a single block-level token to its type-specific renderer.
- *
- * If the token carries a `meta.html` override AND the caller opted in via
- * `allowDangerousMetaHtml: true`, that raw HTML is emitted directly without
- * further processing. When the flag is `false` (the default) `meta.html`
- * is ignored and the token is rendered normally — plugins that write
- * `meta.html` therefore get a predictable no-op unless the caller has
- * audited every plugin in the pipeline.
+ * Checks component overrides first; falls through to built-in rendering.
  *
  * @param token - The block-level token to render.
- * @param opts - Resolved rendering options (carries the opt-in flag).
+ * @param opts - Resolved rendering options.
  * @param out - Accumulator array for HTML string fragments.
- * @throws {StreamdHtmlArgumentError} Via `unreachableToken` if the token
- *   type is unknown.
+ * @throws {StreamdHtmlArgumentError} Via `unreachableToken` if unknown.
  */
 function renderBlock(token: Token, opts: ResolvedOptions, out: Array<string>): void {
-  if (opts.allowDangerousMetaHtml && token.meta?.html !== undefined) {
-    out.push(token.meta.html);
+  const override = opts.components?.[token.type];
+  if (override) {
+    out.push((override as (t: Token, ctx: HtmlRenderContext) => string)(token, buildContext(opts)));
     return;
   }
   switch (token.type) {
-    case TokenType.Blockquote:
+    case "blockquote":
       renderBlockquote(token, opts, out);
       return;
-    case TokenType.List:
+    case "list":
       renderList(token, opts, out);
       return;
-    case TokenType.ListItem:
+    case "list_item":
       renderListItem(token, opts, false, out);
       return;
-    case TokenType.Heading:
+    case "heading":
       renderHeading(token, opts, out);
       return;
-    case TokenType.Paragraph:
+    case "paragraph":
       renderParagraph(token, opts, out);
       return;
-    case TokenType.CodeBlock:
+    case "code_block":
       renderCodeBlock(token, opts, out);
       return;
-    case TokenType.HtmlBlock:
-      out.push(token.content);
-      return;
-    case TokenType.Hr:
+    case "hr":
       out.push(`<hr${elementAttrs(opts, "hr", token.meta)}${opts.voidClose}\n`);
       return;
-    case TokenType.Space:
+    case "space":
       return;
-    case TokenType.Table:
+    case "table":
       renderTable(token, opts, out);
       return;
-    case TokenType.MathBlock:
+    case "math_block":
       renderMathBlock(token, opts, out);
       return;
     default:
@@ -479,9 +387,7 @@ function renderBlockquote(token: BlockquoteToken, opts: ResolvedOptions, out: Ar
 }
 
 /**
- * Renders an ordered or unordered list token as `<ol>` or `<ul>`.
- *
- * Includes a `start` attribute for ordered lists that do not begin at 1.
+ * Renders an ordered or unordered list token.
  *
  * @param token - The list token containing list-item children.
  * @param opts - Resolved rendering options.
@@ -502,11 +408,11 @@ function renderList(token: ListToken, opts: ResolvedOptions, out: Array<string>)
 }
 
 /**
- * Renders a list item token as `<li>` with its body content.
+ * Renders a list item token as `<li>`.
  *
  * @param token - The list item token.
  * @param opts - Resolved rendering options.
- * @param tight - Whether the parent list is tight (affects paragraph unwrapping).
+ * @param tight - Whether the parent list is tight.
  * @param out - Accumulator array for HTML string fragments.
  */
 function renderListItem(
@@ -521,11 +427,7 @@ function renderListItem(
 }
 
 /**
- * Renders the inner body of a list item, handling task checkboxes and
- * tight-list paragraph unwrapping.
- *
- * In tight mode with a single paragraph child, the paragraph wrapper is
- * omitted and inlines are rendered directly.
+ * Renders the inner body of a list item.
  *
  * @param token - The list item token whose body to render.
  * @param opts - Resolved rendering options.
@@ -542,7 +444,7 @@ function renderListItemBody(
 
   if (tight && token.children.length === 1) {
     const only = token.children[0];
-    if (only.type === TokenType.Paragraph) {
+    if (only.type === "paragraph") {
       renderInlines(only.children, opts, out);
       return;
     }
@@ -556,14 +458,7 @@ function renderListItemBody(
 }
 
 /**
- * Attempts to render list-item children as tight paragraphs (no `<p>` wrappers).
- *
- * Only valid for tight lists — CommonMark §5.2 requires loose lists to wrap
- * each item-paragraph in `<p>`. Callers MUST gate the invocation on
- * `tight === true`; this helper does not re-check the flag.
- *
- * Returns true if all children are paragraphs and were rendered inline;
- * returns false if any child is not a paragraph, leaving `out` unchanged.
+ * Attempts to render list-item children as tight paragraphs.
  *
  * @param children - The list item's child tokens.
  * @param opts - Resolved rendering options.
@@ -576,7 +471,7 @@ function tryRenderTightChildren(
   out: Array<string>,
 ): boolean {
   for (let i = 0; i < children.length; i++) {
-    if (children[i].type !== TokenType.Paragraph) return false;
+    if (children[i].type !== "paragraph") return false;
   }
   for (let i = 0; i < children.length; i++) {
     if (i > 0) out.push("\n");
@@ -586,18 +481,10 @@ function tryRenderTightChildren(
 }
 
 /**
- * Produces the HTML for a task-list checkbox or text marker.
- *
- * When `taskListCheckboxes` is "none", returns a text bracket marker.
- * Otherwise returns a disabled `<input type="checkbox">` element annotated
- * with the ARIA attributes required by WAI-ARIA 1.2 §checkbox:
- * `role="checkbox"`, explicit `aria-checked="true|false"`, and
- * `aria-disabled="true"`. The explicit lowercase string values defend
- * against assistive-tech implementations that do not treat a boolean
- * `checked` attribute as the aria-checked source of truth.
+ * Produces the HTML for a task-list checkbox.
  *
  * @param checked - Whether the checkbox is checked.
- * @param opts - Resolved rendering options controlling checkbox style.
+ * @param opts - Resolved rendering options.
  * @returns HTML string for the checkbox or text marker.
  */
 function renderTaskCheckbox(checked: boolean, opts: ResolvedOptions): string {
@@ -608,9 +495,9 @@ function renderTaskCheckbox(checked: boolean, opts: ResolvedOptions): string {
 }
 
 /**
- * Renders a heading token as `<h1>`–`<h6>` with inline children.
+ * Renders a heading token as `<h1>`–`<h6>`.
  *
- * @param token - The heading token with level and inline children.
+ * @param token - The heading token.
  * @param opts - Resolved rendering options.
  * @param out - Accumulator array for HTML string fragments.
  */
@@ -622,9 +509,9 @@ function renderHeading(token: HeadingToken, opts: ResolvedOptions, out: Array<st
 }
 
 /**
- * Renders a paragraph token as `<p>` with inline children.
+ * Renders a paragraph token as `<p>`.
  *
- * @param token - The paragraph token containing inline children.
+ * @param token - The paragraph token.
  * @param opts - Resolved rendering options.
  * @param out - Accumulator array for HTML string fragments.
  */
@@ -635,17 +522,21 @@ function renderParagraph(token: ParagraphToken, opts: ResolvedOptions, out: Arra
 }
 
 /**
- * Renders a fenced code block as `<pre><code>` with optional language class.
+ * Renders a fenced code block. When `meta.highlight` is populated,
+ * emits per-segment `<span>` elements with inline styles. Otherwise
+ * emits plain escaped code.
  *
- * The code content is HTML-escaped. A `language-{lang}` class is added to
- * the `<code>` element unless `omitCodeLanguageClass` is set or no language
- * is specified.
- *
- * @param token - The code block token with language and content.
+ * @param token - The code block token.
  * @param opts - Resolved rendering options.
  * @param out - Accumulator array for HTML string fragments.
  */
 function renderCodeBlock(token: CodeBlockToken, opts: ResolvedOptions, out: Array<string>): void {
+  const highlight = token.meta?.highlight;
+  if (highlight !== undefined) {
+    renderHighlightedCodeBlock(token, highlight, opts, out);
+    return;
+  }
+
   const hasLang = token.lang.length > 0;
   const langClass = hasLang && !opts.omitCodeLanguageClass ? `language-${token.lang}` : undefined;
 
@@ -653,9 +544,7 @@ function renderCodeBlock(token: CodeBlockToken, opts: ResolvedOptions, out: Arra
   if (hasLang) {
     out.push(` role="region" aria-label="${escapeAttr(`${token.lang} code block`)}"`);
   }
-  out.push(">");
-
-  out.push("<code");
+  out.push("><code");
   if (langClass) out.push(` class="${escapeAttr(langClass)}"`);
   out.push(">");
   out.push(escapeHtml(token.content));
@@ -663,11 +552,62 @@ function renderCodeBlock(token: CodeBlockToken, opts: ResolvedOptions, out: Arra
 }
 
 /**
- * Renders a GFM table token as `<table>` with `<thead>` and optional `<tbody>`.
+ * Renders a code block with structured highlight data as styled spans.
  *
- * Column alignment is applied via `align` attributes on `<th>` and `<td>`.
+ * @param token - The code block token.
+ * @param highlight - Structured highlight data from plugin-shiki.
+ * @param opts - Resolved rendering options.
+ * @param out - Accumulator array for HTML string fragments.
+ */
+function renderHighlightedCodeBlock(
+  token: CodeBlockToken,
+  highlight: HighlightData,
+  opts: ResolvedOptions,
+  out: Array<string>,
+): void {
+  const lang = token.lang.length > 0 ? token.lang : highlight.lang;
+
+  out.push(`<pre${elementAttrs(opts, "pre", token.meta, "streamd-code-block")}`);
+  if (lang.length > 0) out.push(` data-lang="${escapeAttr(lang)}"`);
+  out.push(` tabindex="0" role="region" aria-label="${escapeAttr("code example")}"><code>`);
+
+  for (let lineIdx = 0; lineIdx < highlight.lines.length; lineIdx++) {
+    if (lineIdx > 0) out.push("\n");
+    const segments = highlight.lines[lineIdx];
+    for (let segIdx = 0; segIdx < segments.length; segIdx++) {
+      renderThemedSegment(segments[segIdx], out);
+    }
+  }
+
+  out.push("</code></pre>\n");
+}
+
+/**
+ * Renders a single themed segment as a `<span>` with inline styles.
  *
- * @param token - The table token with head, rows, and alignment info.
+ * @param seg - The themed segment with text and style properties.
+ * @param out - Accumulator array for HTML string fragments.
+ */
+function renderThemedSegment(seg: ThemedSegment, out: Array<string>): void {
+  const styles: Array<string> = [];
+  if (seg.color) styles.push(`color:${seg.color}`);
+  if (seg.bold) styles.push("font-weight:bold");
+  if (seg.italic) styles.push("font-style:italic");
+  if (seg.underline) styles.push("text-decoration:underline");
+
+  if (styles.length > 0) {
+    out.push(`<span style="${escapeAttr(styles.join(";"))}">`);
+    out.push(escapeHtml(seg.text));
+    out.push("</span>");
+  } else {
+    out.push(escapeHtml(seg.text));
+  }
+}
+
+/**
+ * Renders a GFM table token.
+ *
+ * @param token - The table token.
  * @param opts - Resolved rendering options.
  * @param out - Accumulator array for HTML string fragments.
  */
@@ -701,11 +641,11 @@ function renderTable(token: TableToken, opts: ResolvedOptions, out: Array<string
 }
 
 /**
- * Returns the `align` attribute string for a table cell at the given column.
+ * Returns the `align` attribute string for a table cell.
  *
- * @param align - Array of column alignments (left, center, right, or null).
+ * @param align - Array of column alignments.
  * @param col - Zero-based column index.
- * @returns ` align="<value>"` string, or empty string if no alignment.
+ * @returns ` align="<value>"` string, or empty string.
  */
 function alignStyle(align: ReadonlyArray<"left" | "center" | "right" | null>, col: number): string {
   const a = align[col];
@@ -714,14 +654,10 @@ function alignStyle(align: ReadonlyArray<"left" | "center" | "right" | null>, co
 }
 
 /**
- * Renders a display-math block according to the configured math mode.
+ * Renders a display-math block.
  *
- * In "none" mode, output is suppressed. In "tex-delim" mode, wraps content
- * in `$$` delimiters. In "span-class" mode, wraps in `<pre><code>` with
- * math-specific classes.
- *
- * @param token - The math block token with TeX content.
- * @param opts - Resolved rendering options controlling math output mode.
+ * @param token - The math block token.
+ * @param opts - Resolved rendering options.
  * @param out - Accumulator array for HTML string fragments.
  */
 function renderMathBlock(token: MathBlockToken, opts: ResolvedOptions, out: Array<string>): void {
@@ -736,27 +672,22 @@ function renderMathBlock(token: MathBlockToken, opts: ResolvedOptions, out: Arra
 }
 
 /**
- * Type predicate: the current inline token is a `Text` whose successor is
- * a `Hardbreak`. Wrapping the two atomic facts (`token is Text`,
- * `next is Hardbreak`) in one named predicate keeps the caller readable
- * while still narrowing `token` to {@link TextToken} inside the branch.
+ * Type predicate: text token preceding a hardbreak (for trailing-space strip).
  *
  * @param token Current inline token.
- * @param next Following inline token (undefined at end of list).
+ * @param next Following inline token.
  */
 function isTextBeforeHardbreak(
   token: InlineToken,
   next: InlineToken | undefined,
 ): token is TextToken {
-  const isText = token.type === TokenType.Text;
-  const hasNext = next !== undefined;
-  const nextIsHardbreak = hasNext && next.type === TokenType.Hardbreak;
+  const isText = token.type === "text";
+  const nextIsHardbreak = next !== undefined && next.type === "hardbreak";
   return isText && nextIsHardbreak;
 }
 
 /**
- * Renders an array of inline tokens, applying special handling for
- * text tokens that precede hard line breaks (strips trailing spaces).
+ * Renders an array of inline tokens.
  *
  * @param tokens - Array of inline tokens to render.
  * @param opts - Resolved rendering options.
@@ -781,12 +712,9 @@ function renderInlines(
 }
 
 /**
- * Renders a text token with trailing spaces stripped (used before hardbreaks).
+ * Renders a text token with trailing spaces stripped (before hardbreaks).
  *
- * CommonMark specifies that trailing spaces before a hard line break are
- * not rendered. This function trims them before escaping and emitting.
- *
- * @param token - The text token whose content may have trailing spaces.
+ * @param token - The text token.
  * @param out - Accumulator array for HTML string fragments.
  */
 function renderTextStrippingTrailingSpaces(token: TextToken, out: Array<string>): void {
@@ -807,46 +735,46 @@ function renderTextStrippingTrailingSpaces(token: TextToken, out: Array<string>)
  * @param token - The inline token to render.
  * @param opts - Resolved rendering options.
  * @param out - Accumulator array for HTML string fragments.
- * @throws Error via `unreachableToken` if the token type is unknown.
  */
 function renderInline(token: InlineToken, opts: ResolvedOptions, out: Array<string>): void {
+  const override = opts.components?.[token.type];
+  if (override) {
+    out.push(
+      (override as (t: InlineToken, ctx: HtmlRenderContext) => string)(token, buildContext(opts)),
+    );
+    return;
+  }
   switch (token.type) {
-    case TokenType.Text:
+    case "text":
       out.push(escapeHtml(decodeEntities(token.content)));
       return;
-    case TokenType.Softbreak:
-      out.push("\n");
-      return;
-    case TokenType.Hardbreak:
+    case "hardbreak":
       out.push(`<br${opts.voidClose}\n`);
       return;
-    case TokenType.CodeSpan:
+    case "code_span":
       out.push(
         `<code${elementAttrs(opts, "code", token.meta)}>${escapeHtml(token.content)}</code>`,
       );
       return;
-    case TokenType.Em:
+    case "em":
       renderEm(token, opts, out);
       return;
-    case TokenType.Strong:
+    case "strong":
       renderStrong(token, opts, out);
       return;
-    case TokenType.Strikethrough:
+    case "strikethrough":
       renderStrikethrough(token, opts, out);
       return;
-    case TokenType.Link:
+    case "link":
       renderLink(token, opts, out);
       return;
-    case TokenType.Image:
+    case "image":
       renderImage(token, opts, out);
       return;
-    case TokenType.HtmlInline:
-      out.push(token.content);
-      return;
-    case TokenType.Escape:
+    case "escape":
       out.push(escapeHtml(token.content));
       return;
-    case TokenType.MathInline:
+    case "math_inline":
       renderMathInline(token, opts, out);
       return;
     default:
@@ -855,9 +783,9 @@ function renderInline(token: InlineToken, opts: ResolvedOptions, out: Array<stri
 }
 
 /**
- * Renders an emphasis token as `<em>` with inline children.
+ * Renders an emphasis token as `<em>`.
  *
- * @param token - The emphasis token containing inline children.
+ * @param token - The emphasis token.
  * @param opts - Resolved rendering options.
  * @param out - Accumulator array for HTML string fragments.
  */
@@ -868,9 +796,9 @@ function renderEm(token: EmToken, opts: ResolvedOptions, out: Array<string>): vo
 }
 
 /**
- * Renders a strong-emphasis token as `<strong>` with inline children.
+ * Renders a strong-emphasis token as `<strong>`.
  *
- * @param token - The strong token containing inline children.
+ * @param token - The strong token.
  * @param opts - Resolved rendering options.
  * @param out - Accumulator array for HTML string fragments.
  */
@@ -881,9 +809,9 @@ function renderStrong(token: StrongToken, opts: ResolvedOptions, out: Array<stri
 }
 
 /**
- * Renders a strikethrough token as `<del>` with inline children.
+ * Renders a strikethrough token as `<del>`.
  *
- * @param token - The strikethrough token containing inline children.
+ * @param token - The strikethrough token.
  * @param opts - Resolved rendering options.
  * @param out - Accumulator array for HTML string fragments.
  */
@@ -898,23 +826,10 @@ function renderStrikethrough(
 }
 
 /**
- * Computes the effective `rel` value for a link token, enforcing the
- * `noopener noreferrer` guarantee when the link opens in a new tab.
+ * Computes the effective `rel` value for a link token.
  *
- * When `meta.target === "_blank"`, browsers expose the opener window
- * unless the link declares `rel="noopener"`, and leak the referring URL
- * unless it declares `rel="noreferrer"`. Adding both is the WAI-ARIA
- * Authoring Practices and OWASP recommendation.
- *
- * Idempotent: when `meta.rel` already lists `noopener` and `noreferrer`
- * the original string is returned unchanged; when it lists one, the
- * missing token is appended; when it lists neither, both are appended.
- * Author-supplied values are preserved and never duplicated.
- *
- * @param meta - Link token metadata (may be undefined). Only `target`
- *   and `rel` are inspected.
- * @returns The rel string to emit, or `undefined` when no rel should be
- *   added (not target=_blank and no author-supplied rel).
+ * @param meta - Link token metadata.
+ * @returns The rel string to emit, or `undefined`.
  */
 function computeLinkRel(meta: TokenMeta | undefined): string | undefined {
   const authorRel = meta?.rel;
@@ -937,16 +852,9 @@ function computeLinkRel(meta: TokenMeta | undefined): string | undefined {
 }
 
 /**
- * Renders a link token as `<a>` with href, optional title, rel, and target.
+ * Renders a link token as `<a>`.
  *
- * The href is normalized and entity-decoded before attribute escaping.
- * Meta-supplied `rel` and `target` attributes are included when present;
- * when `meta.target === "_blank"` the rel is augmented via
- * {@link computeLinkRel} to always include `noopener noreferrer` —
- * defensively closing the tab-nabbing and referrer-leak holes that
- * `target="_blank"` creates. Existing rel tokens are preserved.
- *
- * @param token - The link token with href, title, and inline children.
+ * @param token - The link token.
  * @param opts - Resolved rendering options.
  * @param out - Accumulator array for HTML string fragments.
  */
@@ -965,12 +873,9 @@ function renderLink(token: LinkToken, opts: ResolvedOptions, out: Array<string>)
 }
 
 /**
- * Renders an image token as a self-closing `<img>` with src, alt, and optional title.
+ * Renders an image token as `<img>`.
  *
- * The src and alt are entity-decoded and attribute-escaped. Void-element
- * closing style respects the XHTML option.
- *
- * @param token - The image token with src, alt, and optional title.
+ * @param token - The image token.
  * @param opts - Resolved rendering options.
  * @param out - Accumulator array for HTML string fragments.
  */
@@ -983,14 +888,10 @@ function renderImage(token: ImageToken, opts: ResolvedOptions, out: Array<string
 }
 
 /**
- * Renders an inline math token according to the configured math mode.
+ * Renders an inline math token.
  *
- * In "none" mode, output is suppressed. In "tex-delim" mode, wraps in
- * single `$` delimiters. In "span-class" mode, wraps in `<code>` with
- * math-specific classes.
- *
- * @param token - The inline math token with TeX content.
- * @param opts - Resolved rendering options controlling math output mode.
+ * @param token - The inline math token.
+ * @param opts - Resolved rendering options.
  * @param out - Accumulator array for HTML string fragments.
  */
 function renderMathInline(token: MathInlineToken, opts: ResolvedOptions, out: Array<string>): void {
