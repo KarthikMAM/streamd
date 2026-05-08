@@ -90,8 +90,8 @@ describe("parse -- streaming (full source API)", () => {
     const r2 = parse("abcdef", r1.state);
     expect(r1.stableCount).toBe(r1.tokens.length);
     expect(r2.stableCount).toBeLessThan(r2.tokens.length);
-    const p1 = r1.tokens[0] as { type: number; children?: Array<{ content?: string }> };
-    const p2 = r2.tokens[0] as { type: number; children?: Array<{ content?: string }> };
+    const p1 = r1.tokens[0] as { type: string; children?: Array<{ content?: string }> };
+    const p2 = r2.tokens[0] as { type: string; children?: Array<{ content?: string }> };
     expect(p1.type).toBe(TokenType.Paragraph);
     expect(p2.type).toBe(TokenType.Paragraph);
     expect(p1.children?.[0]?.content).toBe("abc");
@@ -202,7 +202,7 @@ describe("parse -- paragraph continuation fast path", () => {
     const r2 = parse("Hello **bold** world\n", r1.state);
     expect(r2.tokens.length).toBe(1);
     expect(r2.tokens[0]?.type).toBe(TokenType.Paragraph);
-    const para = r2.tokens[0] as { children: Array<{ type: number }> };
+    const para = r2.tokens[0] as { children: Array<{ type: string }> };
     const hasStrong = para.children.some((c) => c.type === TokenType.Strong);
     expect(hasStrong).toBe(true);
   });

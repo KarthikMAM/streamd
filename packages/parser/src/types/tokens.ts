@@ -1,8 +1,8 @@
 /**
  * Public token interfaces — the output of `parse()`.
  *
- * 23 concrete interfaces forming a discriminated union on the `type` field.
- * Every token has a `type: TokenTypeValue` discriminant.
+ * 20 concrete interfaces forming a discriminated union on the `type` field.
+ * Every token has a `type: TokenTypeValue` discriminant (string literal).
  * All fields are always present (monomorphic shapes).
  *
  * @module types/tokens
@@ -14,6 +14,31 @@ import type { TokenType } from "./token-type";
  * separator row and the renderer should fall back to its default.
  */
 export type Align = "left" | "center" | "right" | null;
+
+/**
+ * A single themed segment within a highlighted code line.
+ * Produced by plugin-shiki and consumed by renderer components.
+ */
+export interface ThemedSegment {
+  readonly text: string;
+  readonly color?: string;
+  readonly bold?: boolean;
+  readonly italic?: boolean;
+  readonly underline?: boolean;
+}
+
+/**
+ * Structured syntax-highlight data attached to CodeBlock tokens.
+ * Populated by plugin-shiki; renderers emit styled spans from this.
+ */
+export interface HighlightData {
+  /** Array of lines, each an array of themed segments. */
+  readonly lines: ReadonlyArray<ReadonlyArray<ThemedSegment>>;
+  /** Detected language (may differ from token.lang on fallback). */
+  readonly lang: string;
+  /** Theme key (light / dark / custom). */
+  readonly theme: string;
+}
 
 /**
  * Optional plugin-driven metadata attached to any block or inline token.
@@ -32,11 +57,12 @@ export interface TokenMeta {
   readonly rel?: string;
   /** `target` attribute (links only). Populated by linkAttributes. */
   readonly target?: string;
-  /** Pre-rendered HTML string — renderers emit this verbatim instead of the
-   *  default element. Populated by highlightCode for CodeBlock. */
-  readonly html?: string;
   /** Arbitrary key/value attributes injected directly on the element. */
   readonly attrs?: Readonly<Record<string, string>>;
+  /** Structured syntax-highlight tokens. plugin-shiki populates. */
+  readonly highlight?: HighlightData;
+  /** Parsed frontmatter attached to the first paragraph, if any. */
+  readonly frontmatter?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -65,8 +91,7 @@ export interface ListToken {
 
 /**
  * Single list item. `checked` is `null` for a plain item or `true`/`false`
- * for a GFM task-list checkbox. Children are block tokens per CommonMark
- * §5.2.
+ * for a GFM task-list checkbox. Children are block tokens per CommonMark §5.2.
  */
 export interface ListItemToken {
   type: typeof TokenType.ListItem;
@@ -98,24 +123,12 @@ export interface ParagraphToken {
 
 /**
  * Fenced or indented code block. `lang` is the first whitespace-delimited
- * word of the info string; `info` is the full info string (may contain
- * additional tokens). `content` is the raw code with no inline parsing.
+ * word of the info string. `content` is the raw code with no inline parsing.
  * CommonMark §4.4–4.5.
  */
 export interface CodeBlockToken {
   type: typeof TokenType.CodeBlock;
   lang: string;
-  info: string;
-  content: string;
-  meta?: TokenMeta;
-}
-
-/**
- * Raw HTML block (types 1–7 per CommonMark §4.6). `content` includes the
- * opening and closing tags; renderers typically emit it verbatim.
- */
-export interface HtmlBlockToken {
-  type: typeof TokenType.HtmlBlock;
   content: string;
   meta?: TokenMeta;
 }
@@ -129,8 +142,8 @@ export interface HrToken {
 }
 
 /**
- * Blank-line separator token used internally to distinguish tight vs loose
- * lists. Usually filtered out before rendering.
+ * Blank-line separator token emitted between adjacent blocks when
+ * `shouldEmitSpace` returns true. Controls vertical whitespace.
  */
 export interface SpaceToken {
   type: typeof TokenType.Space;
@@ -158,15 +171,6 @@ export interface TableToken {
 export interface TextToken {
   type: typeof TokenType.Text;
   content: string;
-  meta?: TokenMeta;
-}
-
-/**
- * Soft line break within a paragraph — a plain newline. Renderers typically
- * emit a space or a `\n`. CommonMark §6.8.
- */
-export interface SoftbreakToken {
-  type: typeof TokenType.Softbreak;
   meta?: TokenMeta;
 }
 
@@ -246,19 +250,8 @@ export interface ImageToken {
 }
 
 /**
- * Raw inline HTML — tags, comments, PIs, CDATA, declarations. Renderers
- * emit `content` verbatim. CommonMark §6.6.
- */
-export interface HtmlInlineToken {
-  type: typeof TokenType.HtmlInline;
-  content: string;
-  meta?: TokenMeta;
-}
-
-/**
  * Backslash escape of an ASCII punctuation character. `content` is the
- * escaped character alone (without the preceding backslash). CommonMark
- * §2.4.
+ * escaped character alone (without the preceding backslash). CommonMark §2.4.
  */
 export interface EscapeToken {
   type: typeof TokenType.Escape;
@@ -297,7 +290,6 @@ export type BlockToken =
   | HeadingToken
   | ParagraphToken
   | CodeBlockToken
-  | HtmlBlockToken
   | HrToken
   | SpaceToken
   | TableToken
@@ -309,7 +301,6 @@ export type BlockToken =
  */
 export type InlineToken =
   | TextToken
-  | SoftbreakToken
   | HardbreakToken
   | CodeSpanToken
   | EmToken
@@ -317,7 +308,6 @@ export type InlineToken =
   | StrikethroughToken
   | LinkToken
   | ImageToken
-  | HtmlInlineToken
   | EscapeToken
   | MathInlineToken;
 

@@ -16,7 +16,6 @@ export const BlockType = {
   ListItem: 3,
   FencedCode: 4,
   IndentedCode: 5,
-  HtmlBlock: 6,
   Paragraph: 7,
   AtxHeading: 8,
   SetextHeading: 9,

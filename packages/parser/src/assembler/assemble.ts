@@ -19,12 +19,12 @@ import {
   createCodeBlockToken,
   createHeadingToken,
   createHrToken,
-  createHtmlBlockToken,
   createMathBlockToken,
   createParagraphToken,
   createSpaceToken,
 } from "../utils/token-factory";
 import { assembleBlockquote, assembleList } from "./container";
+import { shouldEmitSpace } from "./space-rules";
 import { assembleTable } from "./table";
 
 /** Options threaded through assembly for inline parsing. */
@@ -50,8 +50,14 @@ export function assemble(src: string, blocks: Array<Block>, opts: AssembleOpts):
   const tokens: TokensList = [];
   for (let i = 0; i < blocks.length; i++) {
     if (consumed.has(i)) continue;
-    const token = assembleBlock(src, blocks[i]!, refMap, opts);
-    if (token) tokens.push(token);
+    const block = blocks[i]!;
+    if (block.kind === BlockKind.Space) continue;
+    const token = assembleBlock(src, block, refMap, opts);
+    if (!token) continue;
+    if (tokens.length > 0 && shouldEmitSpace(tokens[tokens.length - 1]!, token)) {
+      tokens.push(createSpaceToken());
+    }
+    tokens.push(token);
   }
   return tokens;
 }
@@ -150,11 +156,6 @@ export function assembleBlock(
     case BlockKind.IndentedCode:
       return assembleIndentedCode(src, block);
 
-    case BlockKind.HtmlBlock: {
-      const content = src.slice(block.contentStart, block.contentEnd);
-      return createHtmlBlockToken(content.length > 0 ? `${content}\n` : "");
-    }
-
     case BlockKind.MathBlock:
       return createMathBlockToken(src.slice(block.contentStart, block.contentEnd));
 
@@ -205,7 +206,7 @@ function assembleFencedCode(src: string, block: Block): Token {
     content += "\n";
   }
 
-  return createCodeBlockToken(block.lang, block.info, content);
+  return createCodeBlockToken(block.lang, content);
 }
 
 /** Assemble indented code block. */
@@ -247,5 +248,5 @@ function assembleIndentedCode(src: string, block: Block): Token {
   let content = lines.join("\n");
   if (content.length > 0) content += "\n";
 
-  return createCodeBlockToken("", "", content);
+  return createCodeBlockToken("", content);
 }

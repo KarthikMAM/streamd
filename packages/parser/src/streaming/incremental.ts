@@ -16,8 +16,8 @@
 import type { AssembleOpts } from "../assembler/assemble";
 import { assembleBlock, extractAllLinkRefDefs } from "../assembler/assemble";
 import { scanBlocks } from "../scanner/block/scan";
-import { BlockKind } from "../scanner/block/types";
-import { CC_CR, CC_DOLLAR, CC_LF, CC_SPACE, CC_TAB } from "../scanner/constants";
+import { type Block, BlockKind } from "../scanner/block/types";
+import { CC_0, CC_9, CC_CR, CC_DOLLAR, CC_LF, CC_SPACE, CC_TAB } from "../scanner/constants";
 import { parseInlines } from "../scanner/inline/scan";
 import type { ParseResult, ParserState } from "../types/options";
 import { TokenType } from "../types/token-type";
@@ -95,7 +95,7 @@ export function streamingParse(src: string, state: StreamState): ParseResult {
     !hasFenceClose(src, prevLen, src.length, state.activeFenceChar, state.activeFenceLen)
   ) {
     const content = extractFencedContent(src, state.activeContentStart, src.length);
-    return buildResult(state, [createCodeBlockToken(state.activeLang, state.activeInfo, content)]);
+    return buildResult(state, [createCodeBlockToken(state.activeLang, content)]);
   }
 
   // Fast path 2: math block continuation — O(K)
@@ -197,7 +197,53 @@ function scanActiveRegion(
     return buildResult(state, []);
   }
 
-  // Promote all blocks except the last to completed
+  // List-merge streaming quirk (ADR §4.6):
+  // If the first new block is a list AND the last completed token is also a list,
+  // walk backward, drop the trailing list (and preceding space tokens), and
+  // extend the re-parse region to include the previous list.
+  const firstBlock = activeBlocks[0]!;
+  const completedLen = state.completedTokens.length;
+  if (firstBlock.kind === BlockKind.List && completedLen > 0) {
+    let lastIdx = completedLen - 1;
+    while (lastIdx >= 0 && state.completedTokens[lastIdx]!.type === TokenType.Space) lastIdx--;
+    if (lastIdx >= 0 && state.completedTokens[lastIdx]!.type === TokenType.List) {
+      state.completedTokens.length = lastIdx;
+      const newStart = state.activeBlockStart;
+      let p = newStart - 1;
+      while (p > 0 && src.charCodeAt(p - 1) === CC_LF) p--;
+      while (p > 0 && src.charCodeAt(p - 1) !== CC_LF) p--;
+      while (p > 0) {
+        let pp = p;
+        while (pp > 0 && src.charCodeAt(pp - 1) !== CC_LF) pp--;
+        const lineStart = pp;
+        const ch = src.charCodeAt(lineStart);
+        const isList = ch === 0x2d || ch === 0x2a || ch === 0x2b || (ch >= CC_0 && ch <= CC_9);
+        if (!isList) break;
+        p = lineStart;
+      }
+      state.activeBlockStart = p;
+
+      const extendedSrc = src.slice(state.activeBlockStart, lastComplete);
+      const extendedBlocks = scanBlocks(extendedSrc, opts.math, opts.tables, opts.taskListItems);
+      return finishActiveRegion(src, state, opts, extendedBlocks, extendedSrc);
+    }
+  }
+
+  return finishActiveRegion(src, state, opts, activeBlocks, activeSrc);
+}
+
+/**
+ * Finish active region processing — promote blocks and cache metadata.
+ *
+ * Shared by both the normal and list-merge paths in scanActiveRegion.
+ */
+function finishActiveRegion(
+  src: string,
+  state: StreamState,
+  opts: AssembleOpts,
+  activeBlocks: Array<Block>,
+  activeSrc: string,
+): ParseResult {
   if (activeBlocks.length > 1) {
     const lastIdx = activeBlocks.length - 1;
     const consumed = extractAllLinkRefDefs(activeSrc, activeBlocks, state.refMap);
@@ -221,7 +267,6 @@ function scanActiveRegion(
     state.activeBlockStart = newStart;
   }
 
-  // Cache the last active block's metadata for next call's fast paths
   const lastBlock = activeBlocks[activeBlocks.length - 1]!;
   state.activeBlockKind = lastBlock.kind;
   const absContentStart = state.activeBlockStart + lastBlock.contentStart;
@@ -254,7 +299,6 @@ function scanActiveRegion(
 
   const activeTokens = assembleActive(src, state, opts);
 
-  // Cache inlines if the active block is a paragraph
   if (
     state.activeBlockKind === BlockKind.Paragraph &&
     activeTokens.length === 1 &&

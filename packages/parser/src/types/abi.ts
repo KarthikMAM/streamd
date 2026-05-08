@@ -13,7 +13,7 @@
  * Format: positive integer. No semver — this is a structural ABI, not
  * a feature count.
  */
-export const TOKEN_SCHEMA_VERSION = 1 as const;
+export const TOKEN_SCHEMA_VERSION = 2 as const;
 
 /** The literal type of `TOKEN_SCHEMA_VERSION`. */
 export type TokenSchemaVersion = typeof TOKEN_SCHEMA_VERSION;

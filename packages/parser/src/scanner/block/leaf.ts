@@ -3,13 +3,12 @@
  *
  * Each scanner consumes an entire block in a tight loop and returns
  * a Block record. ATX headings, fenced code, indented code,
- * thematic breaks, HTML blocks, math blocks, paragraphs.
+ * thematic breaks, math blocks.
  *
  * @module scanner/block/leaf
  */
 
 import { CC_BACKTICK, CC_DASH, CC_DOLLAR, CC_HASH, CC_STAR, CC_UNDERSCORE } from "../constants";
-import { matchHtmlBlockClose, matchHtmlBlockOpen } from "./html";
 import { type Block, BlockKind, createBlock } from "./types";
 import { countIndent, findLineEndFast, isBlankRange, isSpaceOrTab, nextLine } from "./utils";
 
@@ -143,7 +142,6 @@ export function scanIndentedCode(src: string, blocks: Array<Block>, bs: number):
       contentEnd = le;
       pos = nextLine(src, le);
     } else if (isBlankRange(src, pos, le)) {
-      // Blank line — tentatively continue (may be trailing)
       pos = nextLine(src, le);
     } else {
       break;
@@ -168,49 +166,6 @@ export function scanThematicBreak(src: string, fns: number, lineEnd: number, ch:
     else if (!isSpaceOrTab(c)) return false;
   }
   return count >= 3;
-}
-
-/** Scan an HTML block to completion. Returns Block or null. Spec §4.6. */
-export function scanHtmlBlock(
-  src: string,
-  bs: number,
-  fns: number,
-  lineEnd: number,
-  inParagraph: boolean,
-): Block | null {
-  const htmlType = matchHtmlBlockOpen(src, fns, lineEnd, inParagraph);
-  if (htmlType === 0) return null;
-
-  const block = createBlock(BlockKind.HtmlBlock, bs);
-  block.htmlBlockType = htmlType;
-  block.contentStart = bs;
-
-  const len = src.length;
-  let pos = bs;
-
-  // Types 1-5: scan for specific close condition
-  // Types 6-7: close on blank line
-  while (pos < len) {
-    const le = findLineEndFast(src, pos);
-    if (htmlType >= 1 && htmlType <= 5) {
-      if (matchHtmlBlockClose(src, pos, le, htmlType)) {
-        block.end = le;
-        block.contentEnd = le;
-        return block;
-      }
-    } else if (htmlType >= 6) {
-      if (pos > bs && isBlankRange(src, pos, le)) {
-        block.end = le;
-        block.contentEnd = pos > bs ? pos - 1 : bs;
-        return block;
-      }
-    }
-    pos = nextLine(src, le);
-  }
-
-  block.end = len;
-  block.contentEnd = len;
-  return block;
 }
 
 /** Scan a math block. Returns Block or null. */

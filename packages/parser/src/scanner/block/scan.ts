@@ -16,7 +16,6 @@ import {
   CC_DOLLAR,
   CC_GT,
   CC_HASH,
-  CC_LT,
   CC_PIPE,
   CC_PLUS,
   CC_SPACE,
@@ -28,7 +27,6 @@ import { scanBlockquote } from "./container";
 import {
   scanAtxHeading,
   scanFencedCode,
-  scanHtmlBlock,
   scanIndentedCode,
   scanMathBlock,
   scanThematicBreak,
@@ -58,8 +56,6 @@ export function scanBlocks(
   let pos = 0;
 
   while (pos < len) {
-    // Skip blank lines (no Space token emission — blank lines are
-    // only significant for list tight/loose detection, handled in assembly)
     while (pos < len) {
       const le = findLineEndFast(src, pos);
       if (!isBlankRange(src, pos, le)) break;
@@ -162,17 +158,8 @@ export function scanBlocks(
       continue;
     }
 
-    // HTML block
-    if (ch === CC_LT) {
-      const r = scanHtmlBlock(src, bs, fns, lineEnd, false);
-      if (r) {
-        blocks.push(r);
-        pos = nextLine(src, r.end);
-        continue;
-      }
-    }
-
     // Paragraph (with setext heading and table detection)
+    // Note: lines starting with `<` now fall through here — HTML blocks removed.
     pos = scanParagraph(src, blocks, bs, fns, lineEnd, tables, math);
   }
 

@@ -210,19 +210,15 @@ describe("parse", () => {
       }
     });
 
-    it("should parse inline HTML tags", () => {
+    it("treats inline HTML tags as literal text", () => {
       const { tokens } = parse("a <em>b</em> c");
       const para = tokens[0];
       if (para?.type === TokenType.Paragraph) {
-        // Should contain HtmlInline tokens for <em> and </em>
-        let hasHtml = false;
-        for (const child of para.children) {
-          if (child.type === TokenType.HtmlInline) {
-            hasHtml = true;
-            break;
-          }
-        }
-        expect(hasHtml).toBe(true);
+        // < and > are literal text — no HtmlInline tokens
+        const allText = para.children.every(
+          (child) => child.type === TokenType.Text || child.type === TokenType.Hardbreak,
+        );
+        expect(allText).toBe(true);
       }
     });
 
@@ -296,17 +292,15 @@ describe("parse", () => {
     });
   });
 
-  describe("HTML blocks", () => {
-    it("should parse a <div> as an HTML block", () => {
+  describe("HTML blocks (removed — now paragraphs)", () => {
+    it("treats <div> as a paragraph (HTML blocks removed)", () => {
       const { tokens } = parse("<div>\nfoo\n</div>");
-      expect(tokens.length).toBe(1);
-      expect(tokens[0]?.type).toBe(TokenType.HtmlBlock);
+      expect(tokens[0]?.type).toBe(TokenType.Paragraph);
     });
 
-    it("should parse <!-- comment --> as HTML block type 2", () => {
+    it("treats <!-- comment --> as a paragraph", () => {
       const { tokens } = parse("<!-- comment -->");
-      expect(tokens.length).toBe(1);
-      expect(tokens[0]?.type).toBe(TokenType.HtmlBlock);
+      expect(tokens[0]?.type).toBe(TokenType.Paragraph);
     });
   });
 
@@ -412,11 +406,10 @@ describe("parse", () => {
       expect(tokens[0]?.type).toBe(TokenType.CodeBlock);
     });
 
-    it("should preserve info string", () => {
+    it("preserves lang from info string", () => {
       const { tokens } = parse("```typescript foo bar\ncode\n```");
       if (tokens[0]?.type === TokenType.CodeBlock) {
         expect(tokens[0]?.lang).toBe("typescript");
-        expect(tokens[0]?.info).toBe("typescript foo bar");
       }
     });
 
@@ -446,32 +439,30 @@ describe("parse — coverage edge cases", () => {
 
   it("should handle indented code with trailing blank lines", () => {
     const { tokens } = parse("    code\n    \n    more\n\npara");
-    expect(tokens.length).toBe(2);
+    expect(tokens.length).toBe(3);
     expect(tokens[0]?.type).toBe(TokenType.CodeBlock);
+    expect(tokens[1]?.type).toBe(TokenType.Space);
+    expect(tokens[2]?.type).toBe(TokenType.Paragraph);
   });
 
-  it("should handle HTML block type 2 (comment)", () => {
+  it("treats <!-- comment --> as paragraph (HTML blocks removed)", () => {
     const { tokens } = parse("<!-- comment -->");
-    expect(tokens.length).toBe(1);
-    expect(tokens[0]?.type).toBe(TokenType.HtmlBlock);
+    expect(tokens[0]?.type).toBe(TokenType.Paragraph);
   });
 
-  it("should handle HTML block type 3 (processing instruction)", () => {
+  it("treats <?xml version?> as paragraph", () => {
     const { tokens } = parse("<?xml version?>");
-    expect(tokens.length).toBe(1);
-    expect(tokens[0]?.type).toBe(TokenType.HtmlBlock);
+    expect(tokens[0]?.type).toBe(TokenType.Paragraph);
   });
 
-  it("should handle HTML block type 5 (CDATA)", () => {
+  it("treats <![CDATA[data]]> as paragraph", () => {
     const { tokens } = parse("<![CDATA[data]]>");
-    expect(tokens.length).toBe(1);
-    expect(tokens[0]?.type).toBe(TokenType.HtmlBlock);
+    expect(tokens[0]?.type).toBe(TokenType.Paragraph);
   });
 
-  it("should handle HTML block type 7 (generic tag)", () => {
+  it("treats <custom> tag as paragraph", () => {
     const { tokens } = parse("<custom>\ncontent\n</custom>");
-    expect(tokens.length).toBe(1);
-    expect(tokens[0]?.type).toBe(TokenType.HtmlBlock);
+    expect(tokens[0]?.type).toBe(TokenType.Paragraph);
   });
 
   it("should handle table without leading pipe", () => {
