@@ -252,7 +252,11 @@ export function parseInlines(
           textStart = pos;
           handled = true;
         } else {
-          // Softbreak collapsed into text — newline is literal \n in TextToken
+          // Softbreak collapsed into text — newline is literal \n in
+          // TextToken. Set textStart = pos before pos++ so the \n
+          // becomes the start of the next text run; without this, the
+          // final flush would re-emit the already-flushed prefix.
+          textStart = pos;
           pos++;
           handled = true;
         }
