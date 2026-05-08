@@ -4,5 +4,9 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
   ...baseConfig,
+  entry: {
+    index: "src/index.ts",
+    streaming: "src/streaming/index.ts",
+  },
   external: ["react", "react-native"],
 });

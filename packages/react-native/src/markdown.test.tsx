@@ -227,9 +227,8 @@ describe("useStreamingMarkdown — parseOptions reactivity (H12)", () => {
     rerender("", { gfm: true });
     const afterToggle = readProbe(probe);
     const jsonAfter = JSON.stringify(afterToggle.tokens);
-    // Strikethrough nodes use numeric type 16 in the tree; look for the
-    // presence of the renamed inline marker after re-parse.
-    expect(jsonAfter).toContain('"type":16');
+    // Strikethrough nodes use string type "strikethrough" in the tree.
+    expect(jsonAfter).toContain('"type":"strikethrough"');
   });
 
   it("re-render with identical parseOptions values does not reset parser state", () => {

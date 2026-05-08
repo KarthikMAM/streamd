@@ -24,4 +24,7 @@ export const reactNativeErrorMessage = {
   /** Produces a diagnostic when a streaming chunk is not a string. */
   invalidChunk: (caller: string, received: string) =>
     `${caller}: expected chunk to be a string, received ${received}`,
+  /** Produces a diagnostic when a deprecated option is passed. */
+  deprecatedOption: (caller: string, option: string) =>
+    `${caller}: \`${option}\` has been removed — raw HTML is no longer supported in the token pipeline`,
 } as const;

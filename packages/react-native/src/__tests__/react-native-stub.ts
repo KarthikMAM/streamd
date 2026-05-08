@@ -2,9 +2,8 @@
  * Minimal `react-native` stub used by Node-side vitest runs.
  *
  * Implements only the primitives (`View`, `Text`, `Image`, `Pressable`,
- * `StyleSheet`) and shapes that the `@streamd/react-native` renderer and
- * its tests actually need. Real RN is huge; this stub lets us exercise the
- * full renderer in Node without pulling a native runtime.
+ * `StyleSheet`, `Animated`) and shapes that the `@streamd/react-native`
+ * renderer and its tests actually need.
  *
  * @module react-native-stub
  */
@@ -57,4 +56,33 @@ export const Platform = {
   select<T>(specifics: { default?: T; web?: T; ios?: T; android?: T }): T | undefined {
     return specifics.default;
   },
+};
+
+/** Stub Animated.Value — tracks a numeric value for interpolation. */
+class AnimatedValue {
+  public value: number;
+  constructor(initial: number) {
+    this.value = initial;
+  }
+  /** Stub interpolation — returns the output end value. */
+  interpolate(config: { inputRange: Array<number>; outputRange: Array<number> }): number {
+    return config.outputRange[config.outputRange.length - 1];
+  }
+}
+
+/** Minimal Animated API stub for tests. */
+export const Animated = {
+  Value: AnimatedValue,
+  Text: makeComponent("rn-animated-text"),
+  View: makeComponent("rn-animated-view"),
+  timing: (_value: AnimatedValue, _config: Record<string, unknown>) => ({
+    start: (_cb?: () => void) => {
+      if (_cb) _cb();
+    },
+  }),
+  spring: (_value: AnimatedValue, _config: Record<string, unknown>) => ({
+    start: (_cb?: () => void) => {
+      if (_cb) _cb();
+    },
+  }),
 };

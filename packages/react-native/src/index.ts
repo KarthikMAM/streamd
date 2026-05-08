@@ -8,6 +8,9 @@
 export { createDefaultComponents } from "./components";
 /** Top-level component and streaming hook for rendering markdown. */
 export { StreamdMarkdownNative, useStreamingMarkdown } from "./markdown";
+export type { MemoBlockProps } from "./memo-block";
+/** Memoised block wrapper for streaming re-render optimisation. */
+export { MemoBlock } from "./memo-block";
 /** Imperative render function — converts a token tree to React Native nodes. */
 export { renderReactNative } from "./render";
 /** Theme context value and provider prop types. */
@@ -21,7 +24,7 @@ export type {
   CodeSpanProps,
   Components,
   HeadingProps,
-  HtmlProps,
+  HighlightData,
   ImageProps,
   LinkProps,
   ListItemProps,
@@ -31,6 +34,7 @@ export type {
   RenderReactNativeOptions,
   StreamdMarkdownNativeProps,
   TableProps,
+  ThemedSegment,
   UseStreamingMarkdownResult,
 } from "./types";
 /** Argument-error field type for programmatic error handling. */

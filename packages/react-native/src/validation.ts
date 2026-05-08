@@ -34,7 +34,12 @@ export class StreamdReactNativeArgumentError extends StreamdArgumentError {
  */
 export interface StreamdReactNativeArgumentErrorFields {
   /** Stable discriminator for programmatic branching without message-string matching. */
-  readonly kind: "tokens-not-array" | "unknown-token-type" | "missing-input" | "invalid-chunk";
+  readonly kind:
+    | "tokens-not-array"
+    | "unknown-token-type"
+    | "missing-input"
+    | "invalid-chunk"
+    | "deprecated-option";
   /** Name of the public API function that detected the violation. */
   readonly caller: string;
   /** Human-readable diagnostic message describing the contract violation. */
@@ -91,5 +96,24 @@ export function assertStringChunk(chunk: unknown, caller: string): asserts chunk
     kind: "invalid-chunk",
     caller,
     message: reactNativeErrorMessage.invalidChunk(caller, describeArgumentType(chunk)),
+  });
+}
+
+/**
+ * Throw if the deprecated `allowDangerousMetaHtml` option is passed.
+ *
+ * @param options Props or options object that may contain the deprecated field.
+ * @param caller Name of the caller for diagnostics.
+ * @throws {StreamdReactNativeArgumentError} When the option is present.
+ */
+export function assertNoDeprecatedOption(
+  options: { readonly allowDangerousMetaHtml?: unknown },
+  caller: string,
+): void {
+  if (!("allowDangerousMetaHtml" in options)) return;
+  throw new StreamdReactNativeArgumentError({
+    kind: "deprecated-option",
+    caller,
+    message: reactNativeErrorMessage.deprecatedOption(caller, "allowDangerousMetaHtml"),
   });
 }
