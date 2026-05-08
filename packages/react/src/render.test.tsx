@@ -95,6 +95,81 @@ describe("renderReact — inline tokens", () => {
     const html = renderMarkdown("a  \nb\n");
     expect(html).toContain('<br class="streamd-br"');
   });
+
+  it("inline HTML is wrapped in a streamd-html-inline span with the raw tag preserved", () => {
+    // Covers renderHtmlInline — emits the raw HTML via
+    // dangerouslySetInnerHTML inside a marker span, so the data-x
+    // attribute survives into the DOM.
+    const html = renderMarkdown("a <span data-x>b</span> c");
+    expect(html).toContain('class="streamd-html-inline"');
+    expect(html).toContain("<span data-x>");
+    expect(html).toContain(">b");
+    expect(html).toContain(">a ");
+    expect(html).toContain(" c</p>");
+  });
+
+  it("backslash escape renders the escaped character without the backslash", () => {
+    // Covers renderEscape — the `\\*` in source becomes literal `*`
+    // in the rendered paragraph (no em, no backslash).
+    const html = renderMarkdown("\\*not em\\*");
+    expect(html).toContain('<p class="streamd-p">*not em*</p>');
+    expect(html).not.toContain("\\*");
+    expect(html).not.toContain("<em");
+  });
+});
+
+describe("renderReact — empty/edge cases extra", () => {
+  it("tight list with a non-paragraph child renders via the loose path", () => {
+    // Covers the `allParagraphs === false` branch in renderListItem's
+    // tight-children rendering — the list item contains a nested List
+    // so the shortcut fails and full-paragraph rendering is used.
+    const html = renderToStaticMarkup(
+      createElement(
+        "div",
+        null,
+        renderReact([
+          {
+            type: TokenType.List,
+            ordered: false,
+            start: 1,
+            tight: true,
+            children: [
+              {
+                type: TokenType.ListItem,
+                checked: null,
+                children: [
+                  {
+                    type: TokenType.Paragraph,
+                    children: [{ type: TokenType.Text, content: "outer" }],
+                  },
+                  {
+                    type: TokenType.List,
+                    ordered: false,
+                    start: 1,
+                    tight: true,
+                    children: [
+                      {
+                        type: TokenType.ListItem,
+                        checked: null,
+                        children: [
+                          {
+                            type: TokenType.Paragraph,
+                            children: [{ type: TokenType.Text, content: "nested" }],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          } as unknown as Token,
+        ]) as ReactNode,
+      ),
+    );
+    expect(html).toContain(">outer<");
+    expect(html).toContain(">nested<");
+  });
 });
 
 describe("renderReact — GFM", () => {
@@ -278,36 +353,30 @@ describe("renderReact — entity decoding (HTML parity)", () => {
 describe("renderReact — argument validation (H4 + H16)", () => {
   it("throws StreamdReactArgumentError for unknown token types (kind=unknown-token-type)", () => {
     const bogus: Token = { type: 999 as unknown as typeof TokenType.Text, content: "x" } as Token;
-    try {
-      renderReact([bogus] as TokensList);
-      expect.fail("expected renderReact to throw");
-    } catch (err) {
-      expect(err).toBeInstanceOf(StreamdReactArgumentError);
-      const thrown = err as StreamdReactArgumentError;
-      expect(thrown.kind).toBe("unknown-token-type");
-      expect(thrown.caller).toBe("renderBlock");
-      expect(thrown.source).toBe("@streamd/react");
-    }
+    expect(() => renderReact([bogus] as TokensList)).toThrow(StreamdReactArgumentError);
+    expect(() => renderReact([bogus] as TokensList)).toThrow(
+      expect.objectContaining({
+        kind: "unknown-token-type",
+        caller: "renderBlock",
+        source: "@streamd/react",
+      }),
+    );
   });
 
   it("throws StreamdReactArgumentError when tokens is not an array (kind=tokens-not-array)", () => {
-    try {
-      renderReact(null as unknown as TokensList);
-      expect.fail("expected renderReact to throw");
-    } catch (err) {
-      expect(err).toBeInstanceOf(StreamdReactArgumentError);
-      expect((err as StreamdReactArgumentError).kind).toBe("tokens-not-array");
-    }
+    expect(() => renderReact(null as unknown as TokensList)).toThrow(StreamdReactArgumentError);
+    expect(() => renderReact(null as unknown as TokensList)).toThrow(
+      expect.objectContaining({ kind: "tokens-not-array" }),
+    );
   });
 
   it("StreamdMarkdown throws StreamdReactArgumentError when neither source nor tokens supplied", () => {
-    try {
-      renderToStaticMarkup(createElement(StreamdMarkdown, {}));
-      expect.fail("expected StreamdMarkdown to throw");
-    } catch (err) {
-      expect(err).toBeInstanceOf(StreamdReactArgumentError);
-      expect((err as StreamdReactArgumentError).kind).toBe("missing-input");
-    }
+    expect(() => renderToStaticMarkup(createElement(StreamdMarkdown, {}))).toThrow(
+      StreamdReactArgumentError,
+    );
+    expect(() => renderToStaticMarkup(createElement(StreamdMarkdown, {}))).toThrow(
+      expect.objectContaining({ kind: "missing-input" }),
+    );
   });
 });
 

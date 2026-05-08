@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `utils.ts`.
+ *
+ * @module utils.test
+ */
 import { describe, expect, it } from "vitest";
 import { CC_LF, CC_SPACE, CC_TAB } from "./constants";
 import {

@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `autolink.ts`.
+ *
+ * @module autolink.test
+ */
 import { describe, expect, it } from "vitest";
 import { TokenType } from "../../types/token-type";
 import { matchProtocolPrefix, scanAutolink, scanGfmAutolink } from "./autolink";

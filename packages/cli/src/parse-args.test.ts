@@ -238,29 +238,20 @@ describe("parseCliArgs — combined realistic scenarios", () => {
 
 describe("StreamdCliArgumentError — shape", () => {
   it("exposes kind, caller, and source", () => {
-    try {
-      parseCliArgs(["--nope"]);
-    } catch (err) {
-      const e = err as StreamdCliArgumentError;
-      expect(e).toBeInstanceOf(StreamdCliArgumentError);
-      expect(e.kind).toBe("unknown-flag");
-      expect(e.caller).toBe("parseCliArgs");
-      expect(e.source).toBe("@streamd/cli");
-      expect(e.name).toBe("StreamdCliArgumentError");
-      expect(e.message).toContain("--nope");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => parseCliArgs(["--nope"])).toThrow(StreamdCliArgumentError);
+    expect(() => parseCliArgs(["--nope"])).toThrow(
+      expect.objectContaining({
+        kind: "unknown-flag",
+        caller: "parseCliArgs",
+        source: "@streamd/cli",
+        name: "StreamdCliArgumentError",
+        message: expect.stringContaining("--nope"),
+      }),
+    );
   });
 
   it("is a TypeError subclass (shares the Streamd base)", () => {
-    try {
-      parseCliArgs(["--nope"]);
-    } catch (err) {
-      expect(err).toBeInstanceOf(TypeError);
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => parseCliArgs(["--nope"])).toThrow(TypeError);
   });
 });
 
@@ -268,17 +259,14 @@ describe("StreamdCliArgumentError — shape", () => {
  * Helper: assert that `parseCliArgs(argv)` throws a
  * `StreamdCliArgumentError` with the given `kind`.
  *
+ * Uses vitest's canonical `toThrow` matcher pair — one for the
+ * error class, one for the discriminator field — per
+ * `testing-standards.md` §5.
+ *
  * @param argv Argv slice to pass to parseCliArgs.
  * @param kind Expected discriminator on the thrown error.
  */
 function expectArgError(argv: ReadonlyArray<string>, kind: string): void {
-  try {
-    parseCliArgs(argv);
-  } catch (err) {
-    expect(err).toBeInstanceOf(StreamdCliArgumentError);
-    const e = err as StreamdCliArgumentError;
-    expect(e.kind).toBe(kind);
-    return;
-  }
-  throw new Error(`expected parseCliArgs(${JSON.stringify(argv)}) to throw`);
+  expect(() => parseCliArgs(argv)).toThrow(StreamdCliArgumentError);
+  expect(() => parseCliArgs(argv)).toThrow(expect.objectContaining({ kind }));
 }

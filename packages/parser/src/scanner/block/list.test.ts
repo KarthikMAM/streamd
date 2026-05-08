@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `list.ts`.
+ *
+ * @module list.test
+ */
 import { describe, expect, it } from "vitest";
 import { isOrderedListStart, scanList } from "./list";
 import { BlockKind } from "./types";

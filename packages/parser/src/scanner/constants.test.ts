@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `constants.ts`.
+ *
+ * @module constants.test
+ */
 import { describe, expect, it } from "vitest";
 import {
   CC_AMP,

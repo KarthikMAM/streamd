@@ -7,7 +7,7 @@
  * @module render.test
  */
 
-import { parse } from "@streamd/parser";
+import { parse, TokenType } from "@streamd/parser";
 import { describe, expect, it } from "vitest";
 import { renderHtml } from "./render";
 import { StreamdHtmlArgumentError } from "./validation";
@@ -176,6 +176,71 @@ describe("renderHtml — options", () => {
     expect(html.trimEnd().endsWith("</div>")).toBe(true);
   });
 
+  it("wrapRoot still wraps output in a div when token list is empty", () => {
+    // Covers the `effective.length === 0 && wrapRoot` branch — the renderer
+    // emits an open+close root wrapper so the caller's mount target
+    // doesn't see a stale DOM tree on first render.
+    const html = renderHtml([], { classPrefix: "md", wrapRoot: true });
+    expect(html).toBe('<div class="md-root">\n</div>\n');
+  });
+
+  it("math=tex-delim restores block-math delimiters", () => {
+    // Covers the block-math tex-delim branch that sits alongside the
+    // inline-math case tested above.
+    const md = "$$\nE=mc^2\n$$\n";
+    const html = renderHtml(parse(md, null, { math: true }).tokens, { math: "tex-delim" });
+    expect(html).toContain("$$\nE=mc^2$$\n");
+  });
+
+  it("loose list with a nested list as a child forces full-paragraph rendering", () => {
+    // Covers `tryRenderTightChildren` returning false for a list item
+    // whose children include a non-Paragraph token. Constructed as a
+    // token tree directly — parser output doesn't naturally produce this
+    // shape for short fixtures.
+    const tokens = [
+      {
+        type: TokenType.List,
+        ordered: false,
+        start: 1,
+        tight: false,
+        children: [
+          {
+            type: TokenType.ListItem,
+            checked: null,
+            children: [
+              {
+                type: TokenType.Paragraph,
+                children: [{ type: TokenType.Text, content: "outer" }],
+              },
+              // Non-Paragraph child forces the full-paragraph rendering path.
+              {
+                type: TokenType.List,
+                ordered: false,
+                start: 1,
+                tight: true,
+                children: [
+                  {
+                    type: TokenType.ListItem,
+                    checked: null,
+                    children: [
+                      {
+                        type: TokenType.Paragraph,
+                        children: [{ type: TokenType.Text, content: "nested" }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    const html = renderHtml(tokens as unknown as Parameters<typeof renderHtml>[0]);
+    expect(html).toContain("<p>outer</p>");
+    expect(html).toContain("<li>nested</li>");
+  });
+
   it("omitCodeLanguageClass drops the language attribute", () => {
     const html = renderHtml(parse("```js\nx\n```\n").tokens, { omitCodeLanguageClass: true });
     expect(html).not.toContain("language-");
@@ -204,18 +269,14 @@ describe("renderHtml — edge cases", () => {
 
   it("malformed block token surfaces as StreamdHtmlArgumentError with correct kind", () => {
     const garbage = [{ type: 999 as unknown as 0, children: [] as Array<never> }];
-    try {
-      renderHtml(garbage as unknown as Array<never>);
-    } catch (err) {
-      expect(err).toBeInstanceOf(StreamdHtmlArgumentError);
-      expect(err).not.toStrictEqual(expect.objectContaining({ name: "Error" }));
-      const e = err as StreamdHtmlArgumentError;
-      expect(e.kind).toBe("unknown-token-type");
-      expect(e.source).toBe("@streamd/html");
-      expect(e.caller).toBe("renderBlock");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => renderHtml(garbage as unknown as Array<never>)).toThrow(StreamdHtmlArgumentError);
+    expect(() => renderHtml(garbage as unknown as Array<never>)).toThrow(
+      expect.objectContaining({
+        kind: "unknown-token-type",
+        source: "@streamd/html",
+        caller: "renderBlock",
+      }),
+    );
   });
 
   it("link href with space gets percent-encoded in angle-bracket form", () => {

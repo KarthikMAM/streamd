@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `link.ts`.
+ *
+ * @module link.test
+ */
 import { describe, expect, it } from "vitest";
 import type { LinkReference } from "../../types/internal";
 import { TokenType } from "../../types/token-type";

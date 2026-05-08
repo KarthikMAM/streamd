@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `index.ts`.
+ *
+ * @module index.test
+ */
 import { describe, expect, it } from "vitest";
 import { parse, TokenType } from "./index";
 
@@ -82,18 +87,31 @@ describe("parse", () => {
     expect(stableCount).toBe(tokens.length);
   });
 
-  it("should return a state object", () => {
-    const { state } = parse("# Hello");
-    expect(state).toBeDefined();
+  it("returns a state that preserves stream progress across calls", () => {
+    // A returned state is only useful if it can be threaded back in
+    // and produce an incremental continuation. Feed it back and
+    // verify the second call emits the new paragraph as a distinct
+    // token rather than re-starting.
+    const { state } = parse("# Hello\n");
+    const r2 = parse("# Hello\n\nNext para\n", state);
+    expect(r2.tokens.length).toBe(2);
+    expect(r2.tokens[0]?.type).toBe(TokenType.Heading);
+    expect(r2.tokens[1]?.type).toBe(TokenType.Paragraph);
   });
 
   describe("streaming", () => {
-    it("should parse incrementally with full source", () => {
-      const { state: s1 } = parse("# Hello\n", null);
-      expect(s1).toBeDefined();
+    it("extends an in-progress paragraph when new content arrives on the same logical block", () => {
+      // First call parses "# Hello\n" as a completed heading, leaving
+      // no active block. Second call adds a paragraph "world\n" and
+      // must emit the heading + paragraph as distinct tokens.
+      const { state: s1, tokens: t1 } = parse("# Hello\n", null);
+      expect(t1).toHaveLength(1);
+      expect(t1[0]?.type).toBe(TokenType.Heading);
 
       const { tokens: t2 } = parse("# Hello\nworld\n", s1);
-      expect(t2.length).toBeGreaterThan(0);
+      expect(t2).toHaveLength(2);
+      expect(t2[0]?.type).toBe(TokenType.Heading);
+      expect(t2[1]?.type).toBe(TokenType.Paragraph);
     });
   });
 

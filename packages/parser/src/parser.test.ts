@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `parser.ts`.
+ *
+ * @module parser.test
+ */
 import { describe, expect, it } from "vitest";
 import { createParser, parse } from "./parser";
 import { TokenType } from "./types/token-type";
@@ -25,9 +30,16 @@ describe("parse -- full document", () => {
     expect(stableCount).toBe(tokens.length);
   });
 
-  it("should return a state object", () => {
-    const { state } = parse("# Hello");
-    expect(state).toBeDefined();
+  it("returns a state that can be threaded into a subsequent parse call", () => {
+    // The sole observable contract of the returned state is that it
+    // carries streaming progress forward — verify by feeding it back
+    // in and checking the second call is an incremental extension, not
+    // a re-parse from scratch.
+    const r1 = parse("# Hello\n");
+    const r2 = parse("# Hello\n\nPara\n", r1.state);
+    expect(r2.tokens.length).toBe(2);
+    expect(r2.tokens[0]?.type).toBe(TokenType.Heading);
+    expect(r2.tokens[1]?.type).toBe(TokenType.Paragraph);
   });
 
   it("should resolve GFM options", () => {
@@ -45,27 +57,45 @@ describe("parse -- streaming (full source API)", () => {
   it("should parse incrementally with growing source", () => {
     const r1 = parse("# Hello\n");
     const r2 = parse("# Hello\nWorld\n", r1.state);
-    expect(r2.tokens.length).toBeGreaterThan(0);
+    expect(r2.tokens).toHaveLength(2);
+    expect(r2.tokens[0]?.type).toBe(TokenType.Heading);
+    expect(r2.tokens[1]?.type).toBe(TokenType.Paragraph);
   });
 
   it("should handle incomplete lines", () => {
     const r1 = parse("# Hel");
     const r2 = parse("# Hello\n", r1.state);
-    expect(r2.tokens.length).toBeGreaterThan(0);
+    expect(r2.tokens).toHaveLength(1);
+    expect(r2.tokens[0]?.type).toBe(TokenType.Heading);
   });
 
   it("should handle same source (no new content)", () => {
+    // Streaming call with identical source to the previous: token content
+    // must be identical. `stableCount` can legitimately differ — per
+    // parser-design.md §4.3 a streaming continuation keeps the trailing
+    // block speculative even when no new content arrives.
     const r1 = parse("# Hello\n");
     const r2 = parse("# Hello\n", r1.state);
-    expect(r2.tokens.length).toBeGreaterThan(0);
+    expect(r2.tokens).toEqual(r1.tokens);
   });
 
-  it("should handle source with no complete lines yet", () => {
+  it("speculatively emits a paragraph whose content extends as new chars arrive", () => {
+    // Per parser-design.md §4.3 / Consumer contract: a single-shot
+    // parse finalizes every block (stableCount == tokens.length),
+    // but a streaming continuation keeps the trailing block
+    // speculative (stableCount < tokens.length for the active tail).
+    // Observable proof: the speculative paragraph's content extends
+    // to cover the current accumulated source on every chunk.
     const r1 = parse("abc");
     const r2 = parse("abcdef", r1.state);
-    expect(r2.tokens.length).toBeGreaterThanOrEqual(0);
-    const r3 = parse("abcdef\n", r2.state);
-    expect(r3.tokens.length).toBeGreaterThan(0);
+    expect(r1.stableCount).toBe(r1.tokens.length);
+    expect(r2.stableCount).toBeLessThan(r2.tokens.length);
+    const p1 = r1.tokens[0] as { type: number; children?: Array<{ content?: string }> };
+    const p2 = r2.tokens[0] as { type: number; children?: Array<{ content?: string }> };
+    expect(p1.type).toBe(TokenType.Paragraph);
+    expect(p2.type).toBe(TokenType.Paragraph);
+    expect(p1.children?.[0]?.content).toBe("abc");
+    expect(p2.children?.[0]?.content).toBe("abcdef");
   });
 
   it("should return stableCount for completed blocks", () => {
@@ -85,7 +115,8 @@ describe("parse -- streaming (full source API)", () => {
   it("should handle empty initial parse then content", () => {
     const r1 = parse("");
     const r2 = parse("# Hello\n", r1.state);
-    expect(r2.tokens.length).toBeGreaterThan(0);
+    expect(r2.tokens).toHaveLength(1);
+    expect(r2.tokens[0]?.type).toBe(TokenType.Heading);
   });
 });
 
@@ -219,6 +250,11 @@ describe("parse -- fenced code continuation fast path", () => {
   });
 
   it("should match full parse for unclosed fenced code", () => {
+    // Streaming-equivalence contract: progressively feeding the same
+    // source must produce a terminal token tree with the same shape
+    // AND content as a single-shot parse. Without verifying content,
+    // two code blocks could differ in lang/content and this test
+    // would silently pass.
     const src = "```js\nconst x = 1;\nconst y = 2;\n";
     const full = parse(src);
 
@@ -229,8 +265,12 @@ describe("parse -- fenced code continuation fast path", () => {
     expect(streaming.tokens.length).toBe(full.tokens.length);
     const fullCode = full.tokens.find((t) => t.type === TokenType.CodeBlock);
     const streamCode = streaming.tokens.find((t) => t.type === TokenType.CodeBlock);
-    expect(fullCode).toBeDefined();
-    expect(streamCode).toBeDefined();
+    expect(fullCode).not.toBeUndefined();
+    expect(streamCode).not.toBeUndefined();
+    expect((streamCode as { lang: string }).lang).toBe((fullCode as { lang: string }).lang);
+    expect((streamCode as { content: string }).content).toBe(
+      (fullCode as { content: string }).content,
+    );
   });
 
   it("should preserve language info in fast path", () => {
@@ -291,6 +331,8 @@ describe("createParser", () => {
     const p = createParser();
     const r1 = p("# Hello\n");
     const r2 = p("# Hello\nWorld\n", r1.state);
-    expect(r2.tokens.length).toBeGreaterThan(0);
+    expect(r2.tokens).toHaveLength(2);
+    expect(r2.tokens[0]?.type).toBe(TokenType.Heading);
+    expect(r2.tokens[1]?.type).toBe(TokenType.Paragraph);
   });
 });

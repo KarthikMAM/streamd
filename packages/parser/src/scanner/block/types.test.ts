@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `types.ts`.
+ *
+ * @module types.test
+ */
 import { describe, expect, it } from "vitest";
 import { BlockKind, createBlock } from "./types";
 

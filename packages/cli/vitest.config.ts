@@ -15,6 +15,9 @@ export default mergeConfig(baseConfig, {
         "src/index.ts",
         // Type-only module.
         "src/types.ts",
+        // String-constant error-message lookups; coverage is meaningful
+        // only through the throw sites that reference them.
+        "src/messages.ts",
       ],
       thresholds: {
         statements: 90,

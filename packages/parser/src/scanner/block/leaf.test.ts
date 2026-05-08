@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `leaf.ts`.
+ *
+ * @module leaf.test
+ */
 import { describe, expect, it } from "vitest";
 import { CC_BACKTICK, CC_DOLLAR, CC_TILDE } from "../constants";
 import {
@@ -80,7 +85,10 @@ describe("scanIndentedCode", () => {
     const pos = scanIndentedCode(src, blocks, 0);
     expect(blocks.length).toBe(1);
     expect(blocks[0].kind).toBe(BlockKind.IndentedCode);
-    expect(pos).toBeGreaterThan(0);
+    // Scanner stops at the first non-indented line; both 16-char indented
+    // lines (incl. trailing \n) are consumed, leaving pos at the "not code"
+    // line start.
+    expect(pos).toBe("    code line 1\n    code line 2\n".length);
   });
 });
 

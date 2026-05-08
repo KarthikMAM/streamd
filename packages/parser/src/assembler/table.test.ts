@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `table.ts`.
+ *
+ * @module table.test
+ */
 import { describe, expect, it } from "vitest";
 import { BlockKind, createBlock } from "../scanner/block/types";
 import type { LinkReference } from "../types/internal";
@@ -81,8 +86,12 @@ describe("assembleTable", () => {
     block.align = [null];
     const refMap = new Map<string, LinkReference>();
     const token = assembleTable(src, block, refMap, DEFAULT_OPTS);
+    expect(token.type).toBe(TokenType.Table);
     if (token.type === TokenType.Table) {
-      expect(token.head[0]!.length).toBeGreaterThan(0);
+      // Single-column table with one bolded header cell.
+      expect(token.head).toHaveLength(1);
+      expect(token.head[0]).toHaveLength(1);
+      expect(token.head[0]![0]?.type).toBe(TokenType.Strong);
     }
   });
 });

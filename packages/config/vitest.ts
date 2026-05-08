@@ -59,15 +59,24 @@ export default defineConfig({
        *
        * - `*.test.ts` — test files are not production code.
        * - `*.d.ts` — ambient declarations have no runtime.
-       * - `types/internal.ts`, `types/options.ts`, `types/tokens.ts` —
-       *   type-only modules with no executable statements.
+       * - `types.ts` and `types/` — type-only modules with zero
+       *   executable statements; v8 reports them at 0% because the
+       *   TS compiler erases them entirely.
+       * - `messages.ts` — string-constant error-message lookups;
+       *   coverage is meaningful only through the throw sites that
+       *   reference them, which ARE covered via the error tests.
+       * - `src/index.ts` — public-API barrel files that exist
+       *   purely as re-exports. Tests import from concrete source
+       *   modules (per testing-standards.md section 1), so the barrel
+       *   is never imported from a test and reports 0% spuriously.
        */
       exclude: [
         "**/*.test.ts",
         "**/*.d.ts",
-        "**/types/internal.ts",
-        "**/types/options.ts",
-        "**/types/tokens.ts",
+        "**/types.ts",
+        "**/types/**",
+        "**/messages.ts",
+        "**/src/index.ts",
       ],
 
       /**

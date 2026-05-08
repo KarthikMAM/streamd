@@ -52,6 +52,22 @@ describe("headingAnchors", () => {
     const out = applyPlugins(tokens, [headingAnchors({ slug: (t) => `h-${t.length}` })]).tokens;
     expect((out[0] as HeadingToken).meta?.id).toBe("h-11");
   });
+
+  it("preserves non-ASCII unicode characters verbatim in the slug", () => {
+    // Per the default slugifier, non-ASCII chars (code > 127) pass through
+    // rather than being dropped — exercises the ASCII-max branch.
+    const tokens = parse("# café résumé\n").tokens;
+    const out = applyPlugins(tokens, [headingAnchors()]).tokens;
+    expect((out[0] as HeadingToken).meta?.id).toBe("café-résumé");
+  });
+
+  it("slugifies heading text that contains emphasis / strong / strikethrough / link / image", () => {
+    // The inline-text extractor must recurse through Em/Strong/Strikethrough/Link
+    // and read Image.alt — each `case` in inlineText() needs at least one fixture.
+    const tokens = parse("# *a* **b** ~~c~~ [d](/x) ![e](/y)\n", null, { gfm: true }).tokens;
+    const out = applyPlugins(tokens, [headingAnchors()]).tokens;
+    expect((out[0] as HeadingToken).meta?.id).toBe("a-b-c-d-e");
+  });
 });
 
 describe("linkAttributes", () => {
@@ -83,6 +99,61 @@ describe("linkAttributes", () => {
       linkAttributes({ classify: () => ({ isExternal: true, isAnchor: false }) }),
     ]).tokens;
     expect(findLink(out).meta?.rel).toBe("noopener noreferrer");
+  });
+
+  it("merges anchorClassName with an existing className on the link's meta", () => {
+    const tokens = parse("[top](#top)\n").tokens;
+    const poisoned = tokens.map((t) => {
+      if (t.type !== TokenType.Paragraph) return t;
+      return {
+        ...t,
+        children: t.children.map((c) =>
+          c.type === TokenType.Link ? { ...c, meta: { className: "existing" } } : c,
+        ),
+      };
+    }) as TokensList;
+    const out = applyPlugins(poisoned, [linkAttributes({ anchorClassName: "anchor" })]).tokens;
+    expect(findLink(out).meta?.className).toBe("existing anchor");
+  });
+
+  it("does not duplicate anchorClassName when the link's className already contains it", () => {
+    const tokens = parse("[top](#top)\n").tokens;
+    const poisoned = tokens.map((t) => {
+      if (t.type !== TokenType.Paragraph) return t;
+      return {
+        ...t,
+        children: t.children.map((c) =>
+          c.type === TokenType.Link ? { ...c, meta: { className: "anchor other" } } : c,
+        ),
+      };
+    }) as TokensList;
+    const out = applyPlugins(poisoned, [linkAttributes({ anchorClassName: "anchor" })]).tokens;
+    // Idempotent — "anchor" stays as-is; no duplication.
+    expect(findLink(out).meta?.className).toBe("anchor other");
+  });
+
+  it("treats protocol-relative (//host) URLs as external", () => {
+    const tokens = parse("[cdn](//cdn.example)\n").tokens;
+    const out = applyPlugins(tokens, [linkAttributes()]).tokens;
+    const link = findLink(out);
+    expect(link.meta?.rel).toBe("noopener noreferrer");
+    expect(link.meta?.target).toBe("_blank");
+  });
+
+  it("does not overwrite a preset meta.target", () => {
+    const tokens = parse("[gh](https://github.com)\n").tokens;
+    const poisoned = tokens.map((t) => {
+      if (t.type !== TokenType.Paragraph) return t;
+      return {
+        ...t,
+        children: t.children.map((c) =>
+          c.type === TokenType.Link ? { ...c, meta: { target: "_self" } } : c,
+        ),
+      };
+    }) as TokensList;
+    const out = applyPlugins(poisoned, [linkAttributes()]).tokens;
+    // Author-set target is preserved; plugin only adds rel.
+    expect(findLink(out).meta?.target).toBe("_self");
   });
 });
 
@@ -218,6 +289,55 @@ describe("sanitize", () => {
     for (const inline of outPara.children) {
       expect(inline.meta?.html).toBeUndefined();
     }
+  });
+
+  it("rewrites an image with unsafe src scheme to the fallback URL", () => {
+    const tokens = parse("![alt](javascript:alert(1))\n").tokens;
+    const out = applyPlugins(tokens, [sanitize()]).tokens;
+    const para = out[0];
+    if (para?.type !== TokenType.Paragraph) throw new Error("expected paragraph");
+    const image = para.children.find((c) => c.type === TokenType.Image);
+    if (image?.type !== TokenType.Image) throw new Error("expected image");
+    expect(image.src).toBe("#");
+  });
+
+  it("replaces an unsafe image with its alt text when fallback=null", () => {
+    const tokens = parse("![caption](javascript:alert(1))\n").tokens;
+    const out = applyPlugins(tokens, [sanitize({ unsafeHrefFallback: null })]).tokens;
+    const para = out[0];
+    if (para?.type !== TokenType.Paragraph) throw new Error("expected paragraph");
+    const textOnly = para.children.find((c) => c.type === TokenType.Text);
+    if (textOnly?.type !== TokenType.Text) throw new Error("expected text");
+    expect(textOnly.content).toBe("caption");
+    // The image itself is gone.
+    expect(para.children.find((c) => c.type === TokenType.Image)).toBeUndefined();
+  });
+
+  it("leaves safe https images untouched", () => {
+    const tokens = parse("![ok](https://cdn.example/img.png)\n").tokens;
+    const out = applyPlugins(tokens, [sanitize()]).tokens;
+    const para = out[0];
+    if (para?.type !== TokenType.Paragraph) throw new Error("expected paragraph");
+    const image = para.children.find((c) => c.type === TokenType.Image);
+    if (image?.type !== TokenType.Image) throw new Error("expected image");
+    expect(image.src).toBe("https://cdn.example/img.png");
+  });
+
+  it("accepts user-supplied protocols with or without trailing ':'", () => {
+    // Author passed "custom" (no colon) — sanitize should normalize to "custom:".
+    const tokens = parse("[x](custom:foo)\n").tokens;
+    const out = applyPlugins(tokens, [sanitize({ allowedProtocols: ["custom"] })]).tokens;
+    expect(findLink(out).href).toBe("custom:foo");
+
+    // Author passed "custom:" — already ends with ":" → kept verbatim.
+    const tokens2 = parse("[x](custom:foo)\n").tokens;
+    const out2 = applyPlugins(tokens2, [sanitize({ allowedProtocols: ["custom:"] })]).tokens;
+    expect(findLink(out2).href).toBe("custom:foo");
+
+    // Author passed "custom/" — ends with "/" → kept verbatim (scheme with path separator).
+    const tokens3 = parse("[x](custom/foo)\n").tokens;
+    const out3 = applyPlugins(tokens3, [sanitize({ allowedProtocols: ["custom/"] })]).tokens;
+    expect(findLink(out3).href).toBe("custom/foo");
   });
 });
 

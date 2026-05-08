@@ -7,15 +7,19 @@
  * @module public-api.test
  */
 
-import { parse } from "@streamd/parser";
+import { parse, TokenType } from "@streamd/parser";
 import { StreamdArgumentError } from "@streamd/tokens";
 import { describe, expect, it } from "vitest";
 
 describe("public API — consumer surface", () => {
   it("parser: parse + re-export types", () => {
+    // Public-API smoke test: the parser's tokens are observable by
+    // token count AND by the specific token type emitted for the
+    // given source. `Array.isArray` is trivially true given the TS
+    // types, so we assert the concrete token shape instead.
     const { tokens } = parse("# hi\n");
-    expect(Array.isArray(tokens)).toBe(true);
-    expect(tokens.length).toBeGreaterThan(0);
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]?.type).toBe(TokenType.Heading);
   });
 
   it("html: renderHtml and streamHtml importable", async () => {
@@ -54,8 +58,12 @@ describe("public API — consumer surface", () => {
 
   it("tokens: themes and helpers importable", async () => {
     const tokens = await import("@streamd/tokens");
-    expect(typeof tokens.lightTheme).toBe("object");
-    expect(typeof tokens.darkTheme).toBe("object");
+    // Verify the themes expose the contract every consumer relies on
+    // (color tokens + helpers), not just that they're objects — TS
+    // already guarantees the typeof check trivially.
+    expect(tokens.lightTheme.colors.text).toMatch(/^#/);
+    expect(tokens.darkTheme.colors.text).toMatch(/^#/);
+    expect(tokens.lightTheme.colors.text).not.toBe(tokens.darkTheme.colors.text);
     expect(typeof tokens.mergeTheme).toBe("function");
     expect(typeof tokens.themeToCss).toBe("function");
   });

@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `table-separator.ts`.
+ *
+ * @module table-separator.test
+ */
 import { describe, expect, it } from "vitest";
 import { tryTableSeparator } from "./table-separator";
 

@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `html.ts`.
+ *
+ * @module html.test
+ */
 import { describe, expect, it } from "vitest";
 import { TokenType } from "../../types/token-type";
 import { scanHtmlInline } from "./html";

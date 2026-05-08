@@ -1,16 +1,23 @@
 /** vitest config for @streamd/react-native. */
 import { resolve } from "node:path";
-import { defineConfig } from "vitest/config";
+import baseConfig from "@streamd/config/vitest";
+import { mergeConfig } from "vitest/config";
 
-export default defineConfig({
+export default mergeConfig(baseConfig, {
   test: {
-    globals: true,
-    environment: "node",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     coverage: {
-      provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
-      exclude: ["**/*.test.{ts,tsx}", "**/*.d.ts"],
+      exclude: [
+        "**/*.test.{ts,tsx}",
+        "**/*.d.ts",
+        "**/types.ts",
+        "**/types/**",
+        "**/messages.ts",
+        "**/src/index.ts",
+        // The react-native-stub is test infrastructure, not production code.
+        "**/__tests__/**",
+      ],
     },
   },
   resolve: {

@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `entity.ts`.
+ *
+ * @module entity.test
+ */
 import { describe, expect, it } from "vitest";
 import { TokenType } from "../../types/token-type";
 import { scanEntity } from "./entity";

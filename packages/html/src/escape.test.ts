@@ -49,6 +49,17 @@ describe("normalizeUrl", () => {
   it("encodes unicode characters as utf-8 bytes", () => {
     expect(normalizeUrl("foo/\u00e9")).toBe("foo/%C3%A9");
   });
+
+  it("encodes 3-byte UTF-8 characters (BMP CJK)", () => {
+    // Chinese '中' is U+4E2D — 3-byte UTF-8: E4 B8 AD
+    expect(normalizeUrl("/\u4e2d")).toBe("/%E4%B8%AD");
+  });
+
+  it("encodes 4-byte UTF-8 characters (emoji, supplementary plane)", () => {
+    // '🎉' is U+1F389 — 4-byte UTF-8: F0 9F 8E 89
+    // Exercises the codepoint >= 0x10000 branch in toUtf8Bytes.
+    expect(normalizeUrl("/\u{1F389}")).toBe("/%F0%9F%8E%89");
+  });
 });
 
 describe("decodeEntities", () => {

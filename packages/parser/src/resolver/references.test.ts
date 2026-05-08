@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `references.ts`.
+ *
+ * @module references.test
+ */
 import { describe, expect, it } from "vitest";
 import type { LinkReference } from "../types/internal";
 import { parseLinkDestination, parseLinkTitle, scanLinkRefDef } from "./references";
