@@ -1,5 +1,11 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 # Pre-commit hook — enforce steering rules before the commit lands.
+#
+# Husky v9 dispatches hooks through `sh -e`, ignoring the shebang. This
+# file must stay POSIX-sh compatible: no `set -o pipefail`, no
+# `IFS=$'\n\t'`, no `[[ ]]`. `set -eu` is POSIX-clean and sufficient —
+# none of the commands below use pipes, so pipefail was defense that
+# did nothing.
 #
 # Runs:
 #   1. lint-staged — biome check --write on staged files
@@ -9,8 +15,7 @@
 # Any failure blocks the commit. Use `git commit --no-verify` only in a
 # true emergency.
 
-set -euo pipefail
-IFS=$'\n\t'
+set -eu
 
 echo "pre-commit: lint-staged"
 npx lint-staged
