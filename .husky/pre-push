@@ -1,12 +1,17 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 # Pre-push hook — run the CI gate locally so broken pushes never leave
 # the machine. Pre-commit already handled lint-staged + banned-names +
 # typecheck; this adds build + full test suite.
 #
+# Husky v9 dispatches hooks through `sh -e`, ignoring the shebang. This
+# file must stay POSIX-sh compatible: no `set -o pipefail`, no
+# `IFS=$'\n\t'`, no `[[ ]]`. `set -eu` is POSIX-clean and sufficient —
+# none of the commands below use pipes, so pipefail was defense that
+# did nothing.
+#
 # Skip with --no-verify only in an emergency. Don't normalise that.
 
-set -euo pipefail
-IFS=$'\n\t'
+set -eu
 
 echo "pre-push: lint"
 npm run lint

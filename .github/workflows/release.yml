@@ -62,3 +62,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
+          # Skip husky hooks on the auto-generated version-bump commit
+          # and the follow-up push to changeset-release/main. The full
+          # lint + banned-names + typecheck + build + test gate already
+          # ran in the steps above this one, so re-running them inside
+          # the hook would just duplicate CI work. More importantly,
+          # husky v9 dispatches hooks through `sh -e`, and any bashism
+          # in a contributor's future hook edit would break this
+          # automated commit path — skipping hooks here keeps the
+          # release job resilient to hook regressions.
+          HUSKY: "0"
