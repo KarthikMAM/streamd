@@ -11,12 +11,15 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@streamd/plugin-shiki": "*",
     "@streamd/react": "*",
     "@streamd/tokens": "*",
+    "katex": "^0.16.22",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
   "devDependencies": {
+    "@types/katex": "^0.16.7",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",

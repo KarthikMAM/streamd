@@ -5,6 +5,7 @@
  *
  * @module apps/react-demo/src/types
  */
+import type { StreamingAnimationPreset } from "@streamd/react/streaming";
 
 /**
  * Identifier for the built-in themes this demo can toggle between.
@@ -42,4 +43,14 @@ export interface ThemeSelectorProps {
 export interface StreamingReplayProps {
   /** Full markdown source to replay as a simulated stream. */
   readonly source: string;
+}
+
+/**
+ * Props for the animation preset selector in the streaming reveal demo.
+ */
+export interface PresetSelectorProps {
+  /** Currently selected animation preset. */
+  readonly preset: StreamingAnimationPreset;
+  /** Callback invoked with the newly selected preset. */
+  readonly onChange: (preset: StreamingAnimationPreset) => void;
 }
