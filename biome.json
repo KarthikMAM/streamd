@@ -76,19 +76,26 @@
                 "selector": {
                   "kind": "function"
                 },
-                "formats": ["camelCase", "PascalCase"]
+                "formats": [
+                  "camelCase",
+                  "PascalCase"
+                ]
               },
               {
                 "selector": {
                   "kind": "typeLike"
                 },
-                "formats": ["PascalCase"]
+                "formats": [
+                  "PascalCase"
+                ]
               },
               {
                 "selector": {
                   "kind": "enumMember"
                 },
-                "formats": ["PascalCase"]
+                "formats": [
+                  "PascalCase"
+                ]
               }
             ]
           }
@@ -100,7 +107,10 @@
         "noConsole": {
           "level": "error",
           "options": {
-            "allow": ["warn", "error"]
+            "allow": [
+              "warn",
+              "error"
+            ]
           }
         },
         "noDoubleEquals": "error",
@@ -170,7 +180,9 @@
       }
     },
     {
-      "includes": ["packages/parser/src/**"],
+      "includes": [
+        "packages/parser/src/**"
+      ],
       "linter": {
         "rules": {
           "style": {
@@ -231,7 +243,11 @@
       }
     },
     {
-      "includes": ["**/*.test.ts", "**/*.test.tsx", "**/__tests__/**"],
+      "includes": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/__tests__/**"
+      ],
       "linter": {
         "rules": {
           "style": {
@@ -248,7 +264,10 @@
       }
     },
     {
-      "includes": ["**/scripts/**", "**/*.mjs"],
+      "includes": [
+        "**/scripts/**",
+        "**/*.mjs"
+      ],
       "linter": {
         "rules": {
           "suspicious": {
@@ -269,7 +288,9 @@
       }
     },
     {
-      "includes": ["packages/bench/**"],
+      "includes": [
+        "packages/bench/**"
+      ],
       "linter": {
         "rules": {
           "suspicious": {
@@ -293,7 +314,9 @@
       }
     },
     {
-      "includes": ["apps/**"],
+      "includes": [
+        "apps/**"
+      ],
       "linter": {
         "rules": {
           "suspicious": {
@@ -309,7 +332,9 @@
       }
     },
     {
-      "includes": ["packages/spec/src/skip.ts"],
+      "includes": [
+        "packages/spec/src/skip.ts"
+      ],
       "linter": {
         "rules": {
           "style": {
@@ -319,7 +344,10 @@
       }
     },
     {
-      "includes": ["packages/*/src/index.ts"],
+      "includes": [
+        "packages/*/src/index.ts",
+        "packages/*/src/**/index.ts"
+      ],
       "linter": {
         "rules": {
           "performance": {
@@ -330,7 +358,9 @@
       }
     },
     {
-      "includes": ["**/*.d.ts"],
+      "includes": [
+        "**/*.d.ts"
+      ],
       "linter": {
         "rules": {
           "style": {
@@ -340,7 +370,10 @@
       }
     },
     {
-      "includes": ["packages/spec/scripts/**", "apps/html-demo/build.mjs"],
+      "includes": [
+        "packages/spec/scripts/**",
+        "apps/html-demo/build.mjs"
+      ],
       "linter": {
         "rules": {
           "complexity": {
@@ -353,7 +386,9 @@
       }
     },
     {
-      "includes": ["apps/react-native-demo/src/**"],
+      "includes": [
+        "apps/react-native-demo/src/**"
+      ],
       "linter": {
         "rules": {
           "correctness": {
@@ -363,7 +398,10 @@
       }
     },
     {
-      "includes": ["**/*.html", "**/*.css"],
+      "includes": [
+        "**/*.html",
+        "**/*.css"
+      ],
       "linter": {
         "enabled": false
       }

@@ -1,24 +1,22 @@
 /**
- * Default React components — one per token type.
+ * Default React components — one per token type (20 total).
  *
- * All components accept className-compatible props but render
- * standard HTML semantic elements. Consumers override via the
- * `components` prop of `<StreamdMarkdown>`.
+ * All components render standard HTML semantic elements with prefixed
+ * class names. Consumers override via the `components` prop on
+ * `<StreamdMarkdown>` using the token-type-keyed `ReactComponents` map.
  *
  * Every default component is wrapped in `React.memo` so streaming
- * re-renders skip unchanged subtrees. Inline-style default components
- * close over `prefix` only, so their props drive every difference.
+ * re-renders skip unchanged subtrees.
  *
  * @module components
  */
+import type { HighlightData, ThemedSegment } from "@streamd/parser";
 import { createElement, memo, type ReactNode } from "react";
 import type {
   BaseProps,
   CodeBlockProps,
   CodeSpanProps,
-  Components,
   HeadingProps,
-  HtmlProps,
   ImageProps,
   LinkProps,
   ListItemProps,
@@ -31,23 +29,42 @@ import type {
 const DEFAULT_PREFIX = "streamd";
 
 /**
+ * Internal component map type — one component per token kind.
+ * Used as the return type of `createDefaultComponents`.
+ */
+export interface DefaultComponents {
+  readonly blockquote: React.ComponentType<BaseProps>;
+  readonly list: React.ComponentType<ListProps>;
+  readonly listItem: React.ComponentType<ListItemProps>;
+  readonly heading: React.ComponentType<HeadingProps>;
+  readonly paragraph: React.ComponentType<BaseProps>;
+  readonly codeBlock: React.ComponentType<CodeBlockProps>;
+  readonly hr: React.ComponentType<Record<never, never>>;
+  readonly table: React.ComponentType<TableProps>;
+  readonly mathBlock: React.ComponentType<MathProps>;
+  readonly text: React.ComponentType<{ readonly content: string }>;
+  readonly hardbreak: React.ComponentType<Record<never, never>>;
+  readonly codeSpan: React.ComponentType<CodeSpanProps>;
+  readonly em: React.ComponentType<BaseProps>;
+  readonly strong: React.ComponentType<BaseProps>;
+  readonly strikethrough: React.ComponentType<BaseProps>;
+  readonly link: React.ComponentType<LinkProps>;
+  readonly image: React.ComponentType<ImageProps>;
+  readonly escape: React.ComponentType<{ readonly content: string }>;
+  readonly mathInline: React.ComponentType<MathProps>;
+}
+
+/**
  * Resolves the effective `rel` value for a `<Link>` given the caller's
  * `target` and `rel` props.
  *
- * When `target !== "_blank"` the author-supplied rel is returned as-is
- * (may be `undefined`). When `target === "_blank"` the function ensures
- * both `noopener` and `noreferrer` are present: already-present tokens
- * are never duplicated, and author-supplied extra tokens (for example
- * `external`, `nofollow`) are preserved in insertion order.
- *
- * The augmentation is purely additive, so overriding `Link` components
- * that compute `rel` themselves can still call into this helper to
- * inherit the `target="_blank"` safety guarantee.
+ * When `target === "_blank"` the function ensures both `noopener` and
+ * `noreferrer` are present. Otherwise the author-supplied rel is
+ * returned as-is.
  *
  * @param target - The `<a target>` value or `undefined`.
  * @param rel - The author-supplied rel string or `undefined`.
- * @returns The resolved rel string, or `undefined` when no rel should
- *   be emitted (not `_blank` and no author-supplied rel).
+ * @returns The resolved rel string, or `undefined` when no rel should be emitted.
  */
 function resolveLinkRel(target: string | undefined, rel: string | undefined): string | undefined {
   if (target !== "_blank") return rel;
@@ -57,27 +74,72 @@ function resolveLinkRel(target: string | undefined, rel: string | undefined): st
       if (token.length > 0) existing.add(token);
     }
   }
-  const hasNoopener = existing.has("noopener");
-  const hasNoreferrer = existing.has("noreferrer");
-  if (hasNoopener && hasNoreferrer) return rel;
-  if (!hasNoopener) existing.add("noopener");
-  if (!hasNoreferrer) existing.add("noreferrer");
+  if (!existing.has("noopener")) existing.add("noopener");
+  if (!existing.has("noreferrer")) existing.add("noreferrer");
   return Array.from(existing).join(" ");
 }
 
 /**
- * Build the default component set. The prefix is injected so all default
- * components share consistent class names.
+ * Renders a single themed segment as a `<span>` with inline style.
  *
- * The returned map defines a component for every key in {@link Components},
- * so the return type is narrowed to `Required<Components>`: consumers can
- * access any field without a null check.
+ * @param seg - Themed segment from plugin-shiki highlight data.
+ * @param key - React key for the element.
+ * @returns ReactNode for the styled span.
+ */
+function renderSegment(seg: ThemedSegment, key: string): ReactNode {
+  const style: Record<string, string> = {};
+  if (seg.color) style["color"] = seg.color;
+  if (seg.bold) style["fontWeight"] = "bold";
+  if (seg.italic) style["fontStyle"] = "italic";
+  if (seg.underline) style["textDecoration"] = "underline";
+  const hasStyle = Object.keys(style).length > 0;
+  return createElement("span", { key, style: hasStyle ? style : undefined }, seg.text);
+}
+
+/**
+ * Renders structured highlight data as a `<pre><code>` with styled spans.
+ *
+ * Each line is a `<div>` containing one `<span>` per themed segment.
+ *
+ * @param highlight - Structured highlight data from plugin-shiki.
+ * @param cls - CSS class builder function.
+ * @param lang - Language identifier for the code block.
+ * @returns ReactNode for the highlighted code block.
+ */
+function renderHighlighted(
+  highlight: HighlightData,
+  cls: (kind: string) => string,
+  lang: string,
+): ReactNode {
+  const lines = highlight.lines.map((line, li) =>
+    createElement(
+      "div",
+      { key: li, className: cls("code-line") },
+      ...line.map((seg, si) => renderSegment(seg, `${li}-${si}`)),
+    ),
+  );
+  const hasLang = lang.length > 0;
+  const preProps: Record<string, unknown> = {
+    className: cls("pre"),
+    tabIndex: 0,
+  };
+  if (hasLang) {
+    preProps["role"] = "region";
+    preProps["aria-label"] = `${lang} code block`;
+  }
+  return createElement("pre", preProps, createElement("code", null, ...lines));
+}
+
+/**
+ * Build the default component set for all 20 token types.
+ *
+ * The prefix is injected so all default components share consistent
+ * class names. The returned map defines a component for every token kind.
  *
  * @param prefix - CSS class prefix (e.g. "streamd").
- * @returns Frozen `Required<Components>` object.
+ * @returns Frozen `DefaultComponents` object.
  */
-export function createDefaultComponents(prefix: string = DEFAULT_PREFIX): Required<Components> {
-  /** Build a prefixed class name for a given token kind. */
+export function createDefaultComponents(prefix: string = DEFAULT_PREFIX): DefaultComponents {
   const cls = (kind: string): string => `${prefix}-${kind}`;
 
   /** Blockquote component — renders a `<blockquote>`. */
@@ -87,7 +149,7 @@ export function createDefaultComponents(prefix: string = DEFAULT_PREFIX): Requir
   );
   Blockquote.displayName = "StreamdBlockquote";
 
-  /** List component — renders `<ul>` or `<ol>` depending on `props.ordered`. */
+  /** List component — renders `<ul>` or `<ol>`. */
   const List = memo(
     (props: ListProps): ReactNode =>
       createElement(
@@ -101,22 +163,7 @@ export function createDefaultComponents(prefix: string = DEFAULT_PREFIX): Requir
   );
   List.displayName = "StreamdList";
 
-  /** List-item component — renders a `<li>` with an optional GFM task-list checkbox.
-   *
-   *  The checkbox is always `disabled` — users cannot toggle a markdown
-   *  task-list item through the rendered DOM, so `disabled` is the only
-   *  attribute that matters behaviourally. The HTML renderer in
-   *  `@streamd/html` emits the same set of attributes (`checked`,
-   *  `disabled`, `type`, `role`, `aria-checked`, `aria-disabled`); this
-   *  component is kept in byte-for-byte lock-step so the fuzzer's
-   *  React/HTML parity invariant holds without attribute-strip shims.
-   *
-   *  `readOnly` is intentionally not set. React's "controlled input
-   *  without `onChange`" warning does not fire for `disabled` inputs in
-   *  React 18/19 — the warning targets interactive controls only — so the
-   *  extra attribute would add noise to the output without silencing any
-   *  real warning.
-   */
+  /** List-item component — renders a `<li>` with optional GFM task-list checkbox. */
   const ListItem = memo((props: ListItemProps): ReactNode => {
     const parts: Array<ReactNode> = [];
     if (props.checked !== null) {
@@ -139,15 +186,12 @@ export function createDefaultComponents(prefix: string = DEFAULT_PREFIX): Requir
   });
   ListItem.displayName = "StreamdListItem";
 
-  /** Heading component — renders `<h1>`…`<h6>` with an optional `id` anchor. */
+  /** Heading component — renders `<h1>`…`<h6>` with optional `id` anchor. */
   const Heading = memo(
     (props: HeadingProps): ReactNode =>
       createElement(
         `h${props.level}`,
-        {
-          className: cls(`h${props.level}`),
-          id: props.id,
-        },
+        { className: cls(`h${props.level}`), id: props.id },
         props.children,
       ),
   );
@@ -159,28 +203,17 @@ export function createDefaultComponents(prefix: string = DEFAULT_PREFIX): Requir
   );
   Paragraph.displayName = "StreamdParagraph";
 
-  /** Code-block component — renders `<pre><code>` or injects pre-highlighted HTML.
+  /**
+   * Code-block component — renders `<pre><code>` with structured highlight
+   * spans when `meta.highlight` is present, otherwise plain text content.
    *
-   *  The `props.html` path is gated behind `props.allowDangerousMetaHtml`:
-   *  when the flag is not `true`, the default component ignores `props.html`
-   *  and falls back to the plain `<pre><code>` shell with text content. This
-   *  keeps the default renderer safe against plugin-injected XSS payloads.
-   *
-   *  Accessibility (H11): the `<pre>` receives `tabindex={0}` so keyboard
-   *  users can focus the container and scroll horizontally through wide
-   *  code samples. When a language is set, it also carries `role="region"`
-   *  and a descriptive `aria-label="{lang} code block"` so screen readers
-   *  announce the landmark; without a language neither aria attribute is
-   *  emitted to avoid the "undefined code block" announcement footgun.
+   * To render syntax-highlighted code, use plugin-shiki which attaches
+   * `HighlightData` to `CodeBlock.meta.highlight`. To use KaTeX for math,
+   * override `components.math_block` with a custom component.
    */
   const CodeBlock = memo((props: CodeBlockProps): ReactNode => {
-    const hasHtml = props.html !== undefined;
-    const htmlAllowed = props.allowDangerousMetaHtml === true;
-    if (hasHtml && htmlAllowed) {
-      return createElement("div", {
-        className: cls("pre"),
-        dangerouslySetInnerHTML: { __html: props.html },
-      });
+    if (props.highlight) {
+      return renderHighlighted(props.highlight, cls, props.lang);
     }
     const hasLang = props.lang.length > 0;
     const codeClass = hasLang ? `language-${props.lang}` : undefined;
@@ -199,16 +232,6 @@ export function createDefaultComponents(prefix: string = DEFAULT_PREFIX): Requir
     );
   });
   CodeBlock.displayName = "StreamdCodeBlock";
-
-  /** HTML-block component — renders raw HTML inside a `<div>`. */
-  const HtmlBlock = memo(
-    (props: HtmlProps): ReactNode =>
-      createElement("div", {
-        className: cls("html-block"),
-        dangerouslySetInnerHTML: { __html: props.content },
-      }),
-  );
-  HtmlBlock.displayName = "StreamdHtmlBlock";
 
   /** Thematic-break component — renders `<hr>`. */
   const Hr = memo((): ReactNode => createElement("hr", { className: cls("hr") }));
@@ -237,16 +260,17 @@ export function createDefaultComponents(prefix: string = DEFAULT_PREFIX): Requir
   });
   Table.displayName = "StreamdTable";
 
-  /** Display-math component — renders TeX inside `<pre><code class="language-math">`. */
+  /**
+   * Display-math component — renders raw TeX in `<pre><code>`.
+   *
+   * To render formatted math, override `components.math_block` with a
+   * component that calls KaTeX or MathJax against `token.content`.
+   */
   const MathBlock = memo(
     (props: MathProps): ReactNode =>
       createElement(
         "pre",
-        {
-          className: cls("math-block"),
-          role: "math",
-          "aria-label": "math block",
-        },
+        { className: cls("math-block"), role: "math", "aria-label": "math block" },
         createElement("code", { className: "language-math math-display" }, props.content),
       ),
   );
@@ -255,10 +279,6 @@ export function createDefaultComponents(prefix: string = DEFAULT_PREFIX): Requir
   /** Text component — emits literal text content. */
   const Text = memo((props: { readonly content: string }): ReactNode => props.content);
   Text.displayName = "StreamdText";
-
-  /** Soft-break component — emits a newline character. */
-  const Softbreak = memo((): ReactNode => "\n");
-  Softbreak.displayName = "StreamdSoftbreak";
 
   /** Hard-break component — renders `<br>`. */
   const Hardbreak = memo((): ReactNode => createElement("br", { className: cls("br") }));
@@ -291,17 +311,7 @@ export function createDefaultComponents(prefix: string = DEFAULT_PREFIX): Requir
   );
   Strikethrough.displayName = "StreamdStrikethrough";
 
-  /** Link component — renders `<a>` with href/title/rel/target.
-   *
-   *  Accessibility / security (H11): when `props.target === "_blank"` the
-   *  component defensively augments `rel` with `noopener noreferrer` so
-   *  the new tab cannot reach back into `window.opener` (tab-nabbing)
-   *  and cannot leak the referring URL via `document.referrer`. When
-   *  `props.rel` already lists both tokens the value is passed through
-   *  unchanged; missing tokens are appended without duplicating any
-   *  author-supplied ones. When the link does not open a new tab, the
-   *  author-supplied rel (if any) is forwarded as-is.
-   */
+  /** Link component — renders `<a>` with href/title/rel/target. */
   const Link = memo((props: LinkProps): ReactNode => {
     const combinedClass = props.className ? `${cls("a")} ${props.className}` : cls("a");
     const rel = resolveLinkRel(props.target, props.rel);
@@ -319,7 +329,7 @@ export function createDefaultComponents(prefix: string = DEFAULT_PREFIX): Requir
   });
   Link.displayName = "StreamdLink";
 
-  /** Image component — renders `<img>` with src/alt/title. */
+  /** Image component — renders `<img>` with src/alt/title and meta.attrs. */
   const Image = memo(
     (props: ImageProps): ReactNode =>
       createElement("img", {
@@ -327,25 +337,21 @@ export function createDefaultComponents(prefix: string = DEFAULT_PREFIX): Requir
         src: props.src,
         alt: props.alt,
         title: props.title.length > 0 ? props.title : undefined,
+        ...props.attrs,
       }),
   );
   Image.displayName = "StreamdImage";
-
-  /** Inline-HTML component — renders raw HTML inside a `<span>`. */
-  const HtmlInline = memo(
-    (props: HtmlProps): ReactNode =>
-      createElement("span", {
-        className: cls("html-inline"),
-        dangerouslySetInnerHTML: { __html: props.content },
-      }),
-  );
-  HtmlInline.displayName = "StreamdHtmlInline";
 
   /** Escape component — emits the escaped character as literal text. */
   const Escape = memo((props: { readonly content: string }): ReactNode => props.content);
   Escape.displayName = "StreamdEscape";
 
-  /** Inline-math component — renders TeX inside `<code class="math-inline">`. */
+  /**
+   * Inline-math component — renders raw TeX in `<code>`.
+   *
+   * To render formatted math, override `components.math_inline` with a
+   * component that calls KaTeX against `token.content`.
+   */
   const MathInline = memo(
     (props: MathProps): ReactNode =>
       createElement(
@@ -363,12 +369,10 @@ export function createDefaultComponents(prefix: string = DEFAULT_PREFIX): Requir
     heading: Heading,
     paragraph: Paragraph,
     codeBlock: CodeBlock,
-    htmlBlock: HtmlBlock,
     hr: Hr,
     table: Table,
     mathBlock: MathBlock,
     text: Text,
-    softbreak: Softbreak,
     hardbreak: Hardbreak,
     codeSpan: CodeSpan,
     em: Em,
@@ -376,7 +380,6 @@ export function createDefaultComponents(prefix: string = DEFAULT_PREFIX): Requir
     strikethrough: Strikethrough,
     link: Link,
     image: Image,
-    htmlInline: HtmlInline,
     escape: Escape,
     mathInline: MathInline,
   });
