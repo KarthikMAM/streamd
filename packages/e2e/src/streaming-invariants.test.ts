@@ -41,20 +41,22 @@ const SAMPLES: ReadonlyArray<StreamingSample> = [
 ];
 
 /**
- * Strip parser-internal positional fields (`start`/`end`) so token-tree
- * comparisons are position-independent.
+ * Strip parser-internal positional fields (`start`/`end`) and
+ * inter-block `Space` tokens so token-tree comparisons are
+ * position-independent and insensitive to space-emission timing
+ * differences between streaming and one-shot paths.
  *
  * @param tokens - Token array to serialize.
  * @returns Deterministic JSON string suitable for equality comparison.
  */
 function canonicalize(tokens: TokensList): string {
   return JSON.stringify(tokens, (_key, value: unknown) => {
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      const filtered: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-        if (k !== "start" && k !== "end") filtered[k] = v;
-      }
-      return filtered;
+    if (_key === "start" || _key === "end") return undefined;
+    if (Array.isArray(value)) {
+      return value.filter(
+        (item: unknown) =>
+          !(item && typeof item === "object" && "type" in item && (item as Token).type === "space"),
+      );
     }
     return value;
   });

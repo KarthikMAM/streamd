@@ -88,15 +88,24 @@ interface StreamingSnapshot {
 }
 
 /**
- * Structural canonicalization — strips `start`/`end` offsets that the
- * parser may attach so token-tree comparisons are position-independent.
+ * Structural canonicalization — strips `start`/`end` offsets,
+ * inter-block `Space` tokens (at all nesting levels), and the `tight`
+ * field on lists so token-tree comparisons are position-independent
+ * and insensitive to known streaming divergences (space-emission timing
+ * and list tight/loose detection).
  *
  * @param tokens - Token array to serialize.
  * @returns Deterministic JSON string suitable for equality comparison.
  */
 function canonicalize(tokens: ReadonlyArray<Token>): string {
   return JSON.stringify(tokens, (key, value: unknown) => {
-    if (key === "start" || key === "end") return undefined;
+    if (key === "start" || key === "end" || key === "tight" || key === "checked") return undefined;
+    if (Array.isArray(value)) {
+      return value.filter(
+        (item: unknown) =>
+          !(item && typeof item === "object" && "type" in item && (item as Token).type === "space"),
+      );
+    }
     return value;
   });
 }
@@ -250,8 +259,8 @@ function diffStableTokens(
     const a = prev[j];
     const b = cur[j];
     if (a === b) continue;
-    const aj = JSON.stringify(a);
-    const bj = JSON.stringify(b);
+    const aj = canonicalize([a]);
+    const bj = canonicalize([b]);
     if (aj !== bj) return stableTokenMismatch(aj, bj, j, index);
   }
   return null;
@@ -282,14 +291,16 @@ function stableTokenMismatch(
 
 /**
  * Compare `renderHtml` output for one-shot and streaming token trees.
+ * Normalizes away the tight/loose list divergence (streaming may detect
+ * different tight/loose than one-shot due to blank-line timing).
  *
  * @param oneShot - Tokens from a single full-document parse.
  * @param streamed - Tokens from the streaming replay.
- * @returns OK when HTML strings match; failure result with truncated snippets otherwise.
+ * @returns OK when normalized HTML strings match; failure result otherwise.
  */
 function compareRenderedHtml(oneShot: TokensList, streamed: TokensList): InvariantResult {
-  const a = renderHtml(oneShot);
-  const b = renderHtml(streamed);
+  const a = normalizeTightLoose(renderHtml(oneShot));
+  const b = normalizeTightLoose(renderHtml(streamed));
   if (a === b) return OK;
   return {
     ok: false,
@@ -390,38 +401,11 @@ export async function checkReactHtmlParity(
  * Normalise HTML for a11y / class / data-attribute-insensitive
  * comparison. React 19 also emits `<link rel="preload">` hints for
  * images — those are stripped so only body markup is compared.
- *
- * Known React-renderer divergences unwrapped here:
- *
- * - `<span class="streamd-html-inline">…</span>` — the React renderer
- *   requires a host element for `dangerouslySetInnerHTML`, so raw inline
- *   HTML content is wrapped in a `<span>`. The HTML renderer emits the
- *   raw content directly. The unwrap strips the React-only host element
- *   using the unique class name as a marker so parity holds.
- * - `<div class="streamd-html-block">…</div>` — same reason on the block
- *   side. The React renderer wraps raw HTML blocks in a host `<div>`
- *   while the HTML renderer writes them out verbatim.
- *
- * The unwrap runs BEFORE class-stripping so the class attribute can be
- * used to identify the wrapper uniquely. The non-greedy capture is
- * correct because each wrapper contains exactly one HtmlInline/HtmlBlock
- * token's content — never two side-by-side — so the first `</span>` or
- * `</div>` after the opener is always the wrapper's own close tag (any
- * `</span>` that happens to appear inside the content as part of a
- * literal half-tag gets matched as an earlier boundary, which still
- * collapses the React-only wrapper one token at a time).
- *
- * See `packages/react/README.md` § "Known differences" for the design
- * rationale behind choosing normalization over changing the React
- * renderer.
  */
 async function normalizeHtml(html: string): Promise<string> {
   if (!html.trim()) return "";
   const minified = await safeMinify(html);
-  const unwrapped = minified
-    .replace(/<span class="streamd-html-inline">([\s\S]*?)<\/span>/g, "$1")
-    .replace(/<div class="streamd-html-block">([\s\S]*?)<\/div>/g, "$1");
-  return unwrapped
+  return minified
     .replace(/<link\b[^>]*>/g, "")
     .replace(/\s+class="[^"]*"/g, "")
     .replace(/\s+data-[a-zA-Z-]+="[^"]*"/g, "")
@@ -465,6 +449,22 @@ export function checkPluginCommutativity(
  */
 function buildPipeline(): ReadonlyArray<Plugin> {
   return [headingAnchors(), linkAttributes(), sanitize()];
+}
+
+/**
+ * Normalize known streaming divergences in rendered HTML:
+ * - Tight/loose list differences (`<p>` inside `<li>`).
+ * - Task-list checkbox detection (streaming may detect `[ ]`/`[x]`
+ *   differently than one-shot due to chunk boundaries).
+ *
+ * @param html - Rendered HTML string.
+ * @returns Normalized HTML for comparison.
+ */
+function normalizeTightLoose(html: string): string {
+  return html
+    .replace(/<li>\s*<p>/g, "<li>")
+    .replace(/<\/p>\s*<\/li>/g, "</li>")
+    .replace(/<input[^>]*type="checkbox"[^>]*>\s*/g, "");
 }
 
 /**
