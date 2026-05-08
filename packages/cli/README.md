@@ -59,7 +59,6 @@ curl -s https://example.test/article.md | streamd --gfm --anchors --link-attrs >
 | `--anchors` | off | Inject stable heading `id` attributes via `headingAnchors()` |
 | `--link-attrs` | off | Inject `rel`/`target` on external links via `linkAttributes()` |
 | `--sanitize` / `--no-sanitize` | on | Apply the default-strict `sanitize()` plugin |
-| `--allow-dangerous-meta-html` | off | Honour plugin-attached `meta.html` (requires trusted plugins) |
 | `--stream <auto\|delta\|full\|off>` | `auto` | Streaming mode. `auto` picks delta for pipes, off for a TTY |
 | `--wrap-root` | off | Wrap output in `<div class="<prefix>-root">`. Requires `--class-prefix` |
 | `--xhtml` / `--no-xhtml` | on | XHTML-style void tags (`<br />` vs `<br>`) |
@@ -94,21 +93,22 @@ curl -s https://example.test/article.md | streamd --gfm --anchors --link-attrs >
 `--sanitize` is **on by default** and applies the strict
 `@streamd/plugins` sanitizer:
 
-- `HtmlBlock` and `HtmlInline` tokens are dropped.
 - `Link.href` / `Image.src` schemes are restricted to `http:`,
   `https:`, `mailto:`, `tel:`, `ftp:`.
-- `meta.html` (pre-rendered HTML plugins may attach) is stripped.
 - `meta.attrs` keys are filtered to a safe allowlist.
 
-Pass `--allow-dangerous-meta-html` **only** when every plugin in the
-pipeline is trusted to emit well-formed HTML (e.g. a vetted Shiki
-syntax highlighter). The flag loosens the renderer's `meta.html`
-passthrough and, when combined with `--sanitize`, tells the sanitizer
-to let `meta.html` survive.
+Pass `--no-sanitize` **only** for trusted input — unsafe URLs will not
+be rewritten and any `meta.attrs` plugins attached will reach the
+renderer unfiltered.
 
-Pass `--no-sanitize` **only** for trusted input — raw HTML tokens will
-be emitted verbatim, javascript: URLs will not be rewritten, and any
-`meta.html` any plugin attached will reach the renderer unfiltered.
+## Math / syntax highlighting
+
+Math rendering and syntax highlighting are consumer choices in the
+library API. The CLI emits default HTML only — `code_block` tokens
+render as plain `<pre><code>` and `math_block` / `math_inline` tokens
+render as `<code>` with the raw TeX content. Consumers that need
+KaTeX or Shiki output should use the library API with component
+overrides.
 
 ## Programmatic API
 

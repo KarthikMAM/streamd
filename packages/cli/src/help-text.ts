@@ -31,8 +31,6 @@ Options:
   --link-attrs              Add rel/target to external links
   --sanitize / --no-sanitize
                             Apply the default-strict sanitize() plugin. Default: on
-  --allow-dangerous-meta-html
-                            Honour meta.html emitted by plugins. Requires trusted plugins.
   --stream <auto|delta|full|off>
                             Streaming mode. auto picks delta for pipes and off for a TTY.
                             delta = write common-prefix additions. full = write full HTML each chunk.

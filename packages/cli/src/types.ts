@@ -45,12 +45,6 @@ export interface CliOptions {
   readonly linkAttrs: boolean;
   /** Apply the default-strict `sanitize()` plugin. Default: true. */
   readonly sanitize: boolean;
-  /**
-   * Opt in to honouring `meta.html` emitted by plugins (e.g. a custom
-   * syntax highlighter). Default: false. Only safe when every plugin in
-   * the pipeline is trusted to produce well-formed HTML.
-   */
-  readonly allowDangerousMetaHtml: boolean;
   /** Streaming mode. `"auto"` picks based on stdin.isTTY. */
   readonly stream: CliStreamMode;
   /** Wrap output in `<div class="${prefix}-root">`. Requires `classPrefix`. */

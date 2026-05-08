@@ -76,9 +76,9 @@ describe("run — one-shot (--stream off)", () => {
     expect(stdout).not.toContain("<script>");
   });
 
-  it("keeps raw HTML when --no-sanitize is passed", async () => {
+  it("renders inline HTML as escaped text regardless of --no-sanitize", async () => {
     const { stdout } = await drive("<custom>x</custom>\n", ["--no-sanitize", "--stream", "off"]);
-    expect(stdout).toContain("<custom>x</custom>");
+    expect(stdout).toContain("&lt;custom&gt;x&lt;/custom&gt;");
   });
 
   it("prepends a <style> block when --theme is set", async () => {

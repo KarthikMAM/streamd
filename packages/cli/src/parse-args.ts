@@ -55,8 +55,6 @@ const OPTIONS = {
   sanitize: { type: "boolean" },
   /** Disable sanitize — explicit negative form of `--sanitize`. */
   "no-sanitize": { type: "boolean" },
-  /** Honour `meta.html` emitted by plugins. Requires trusted plugins. */
-  "allow-dangerous-meta-html": { type: "boolean" },
   /** Streaming mode: `auto`, `delta`, `full`, or `off`. */
   stream: { type: "string" },
   /** Wrap output in a root `<div>` with the class prefix. */
@@ -98,8 +96,6 @@ interface ParsedValues {
   readonly sanitize?: boolean;
   /** Whether `--no-sanitize` was passed. */
   readonly "no-sanitize"?: boolean;
-  /** Whether `--allow-dangerous-meta-html` was passed. */
-  readonly "allow-dangerous-meta-html"?: boolean;
   /** Value of `--stream <auto|delta|full|off>`. */
   readonly stream?: string;
   /** Whether `--wrap-root` was passed. */
@@ -148,7 +144,6 @@ export function parseCliArgs(argv: ReadonlyArray<string>): CliOptions {
     anchors: values.anchors === true,
     linkAttrs: values["link-attrs"] === true,
     sanitize: resolveSanitize(values),
-    allowDangerousMetaHtml: values["allow-dangerous-meta-html"] === true,
     stream: resolveStream(values),
     wrapRoot,
     xhtml: resolveXhtml(values),
