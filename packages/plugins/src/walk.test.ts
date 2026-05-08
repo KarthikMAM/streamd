@@ -155,16 +155,13 @@ describe("applyPlugins — sanitize-last ordering", () => {
   it("sanitize-not-last error carries plugin name and kind", () => {
     const sanitizePlugin = makePlugin("sanitize", (t) => t);
     const after = makePlugin("after", (t) => t);
-    try {
-      applyPlugins([], [sanitizePlugin, after]);
-    } catch (err) {
-      const e = err as StreamdPluginAbiError;
-      expect(e.kind).toBe("sanitize-not-last");
-      expect(e.pluginName).toBe("sanitize");
-      expect(e.source).toBe("@streamd/plugins");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => applyPlugins([], [sanitizePlugin, after])).toThrow(
+      expect.objectContaining({
+        kind: "sanitize-not-last",
+        pluginName: "sanitize",
+        source: "@streamd/plugins",
+      }),
+    );
   });
 
   it("throws sanitize-not-last when sanitize is at the first of three", () => {
@@ -188,33 +185,26 @@ describe("applyPlugins — transform error isolation", () => {
     const boom = makePlugin("boom", () => {
       throw original;
     });
-    try {
-      applyPlugins([], [boom]);
-    } catch (err) {
-      const e = err as StreamdPluginAbiError;
-      expect(e.kind).toBe("transform-failed");
-      expect(e.pluginName).toBe("boom");
-      expect(e.cause).toBe(original);
-      expect(e.message).toContain("boom");
-      expect(e.message).toContain("kaboom");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => applyPlugins([], [boom])).toThrow(
+      expect.objectContaining({
+        kind: "transform-failed",
+        pluginName: "boom",
+        cause: original,
+        message: expect.stringMatching(/boom.*kaboom|kaboom.*boom/),
+      }),
+    );
   });
 
   it("non-Error thrown values are still wrapped and carried on cause", () => {
     const boom = makePlugin("stringThrower", () => throwValue("bare string"));
-    try {
-      applyPlugins([], [boom]);
-    } catch (err) {
-      const e = err as StreamdPluginAbiError;
-      expect(e.kind).toBe("transform-failed");
-      expect(e.pluginName).toBe("stringThrower");
-      expect(e.cause).toBe("bare string");
-      expect(e.message).toContain("bare string");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => applyPlugins([], [boom])).toThrow(
+      expect.objectContaining({
+        kind: "transform-failed",
+        pluginName: "stringThrower",
+        cause: "bare string",
+        message: expect.stringContaining("bare string"),
+      }),
+    );
   });
 });
 
@@ -255,5 +245,135 @@ describe("composePlugins", () => {
   it("composed plugin has its own requires declaration", () => {
     const composed = composePlugins("composed", []);
     expect(composed.requires.tokenSchema).toBe(TOKEN_SCHEMA_VERSION);
+  });
+});
+
+describe("walk — container rebuild paths on mutation", () => {
+  /**
+   * A visitor that uppercases every Text token's content. This forces
+   * every container token to rebuild because its children differ from
+   * the input, exercising all the `if (children === token.children)`
+   * false-branches in walk.ts.
+   */
+  const UPPERCASE_TEXT: Parameters<typeof walk>[1] = {
+    inline(t) {
+      if (t.type !== TokenType.Text) return undefined;
+      return { ...t, content: t.content.toUpperCase() };
+    },
+  };
+
+  it("rebuilds a blockquote when a nested Text child is mutated", () => {
+    const tokens = parse("> hi\n").tokens;
+    const out = walk(tokens, UPPERCASE_TEXT);
+    expect(out).not.toBe(tokens);
+    const bq = out[0];
+    if (bq?.type !== TokenType.Blockquote) throw new Error("expected blockquote");
+    const para = bq.children[0];
+    if (para?.type !== TokenType.Paragraph) throw new Error("expected paragraph");
+    const text = para.children[0];
+    if (text?.type !== TokenType.Text) throw new Error("expected text");
+    expect(text.content).toBe("HI");
+  });
+
+  it("rebuilds a list and every modified list item", () => {
+    const tokens = parse("- one\n- two\n").tokens;
+    const out = walk(tokens, UPPERCASE_TEXT);
+    expect(out).not.toBe(tokens);
+    const list = out[0];
+    if (list?.type !== TokenType.List) throw new Error("expected list");
+    expect(list.children).toHaveLength(2);
+    const firstItemPara = list.children[0]?.children[0];
+    if (firstItemPara?.type !== TokenType.Paragraph) throw new Error("expected paragraph");
+    const firstText = firstItemPara.children[0];
+    if (firstText?.type !== TokenType.Text) throw new Error("expected text");
+    expect(firstText.content).toBe("ONE");
+  });
+
+  it("rebuilds a heading when its inline child is mutated", () => {
+    const tokens = parse("# hello\n").tokens;
+    const out = walk(tokens, UPPERCASE_TEXT);
+    expect(out).not.toBe(tokens);
+    const h = out[0];
+    if (h?.type !== TokenType.Heading) throw new Error("expected heading");
+    const text = h.children[0];
+    if (text?.type !== TokenType.Text) throw new Error("expected text");
+    expect(text.content).toBe("HELLO");
+  });
+
+  it("rebuilds a table's head and body cells when text is mutated", () => {
+    const tokens = parse("| a | b |\n| --- | --- |\n| 1 | 2 |\n", null, { gfm: true }).tokens;
+    const out = walk(tokens, UPPERCASE_TEXT);
+    const table = out[0];
+    if (table?.type !== TokenType.Table) throw new Error("expected table");
+    const headCell = table.head[0]?.[0];
+    if (headCell?.type !== TokenType.Text) throw new Error("expected head text");
+    expect(headCell.content).toBe("A");
+    const bodyCell = table.rows[0]?.[0]?.[0];
+    if (bodyCell?.type !== TokenType.Text) throw new Error("expected body text");
+    expect(bodyCell.content).toBe("1");
+  });
+
+  it("rebuilds an Em/Strong when inline children mutate", () => {
+    const tokens = parse("*em* and **strong**\n").tokens;
+    const out = walk(tokens, UPPERCASE_TEXT);
+    const para = out[0];
+    if (para?.type !== TokenType.Paragraph) throw new Error("expected paragraph");
+    const em = para.children[0];
+    if (em?.type !== TokenType.Em) throw new Error("expected em");
+    const emText = em.children[0];
+    if (emText?.type !== TokenType.Text) throw new Error("expected em text");
+    expect(emText.content).toBe("EM");
+    const strong = para.children[2];
+    if (strong?.type !== TokenType.Strong) throw new Error("expected strong");
+    const strongText = strong.children[0];
+    if (strongText?.type !== TokenType.Text) throw new Error("expected strong text");
+    expect(strongText.content).toBe("STRONG");
+  });
+
+  it("rebuilds a Strikethrough when child text mutates", () => {
+    const tokens = parse("~~gone~~\n", null, { gfm: true }).tokens;
+    const out = walk(tokens, UPPERCASE_TEXT);
+    const para = out[0];
+    if (para?.type !== TokenType.Paragraph) throw new Error("expected paragraph");
+    const strike = para.children[0];
+    if (strike?.type !== TokenType.Strikethrough) throw new Error("expected strikethrough");
+    const text = strike.children[0];
+    if (text?.type !== TokenType.Text) throw new Error("expected text");
+    expect(text.content).toBe("GONE");
+  });
+
+  it("rebuilds a Link when its inline text child mutates", () => {
+    const tokens = parse("[name](/url)\n").tokens;
+    const out = walk(tokens, UPPERCASE_TEXT);
+    const para = out[0];
+    if (para?.type !== TokenType.Paragraph) throw new Error("expected paragraph");
+    const link = para.children[0];
+    if (link?.type !== TokenType.Link) throw new Error("expected link");
+    const text = link.children[0];
+    if (text?.type !== TokenType.Text) throw new Error("expected text");
+    expect(text.content).toBe("NAME");
+  });
+
+  it("preserves reference equality when visitor returns undefined on every token", () => {
+    // Control: if the visitor never changes anything, every container
+    // hits the `children === token.children` true-branch and returns
+    // the input unchanged.
+    const tokens = parse("# hi\n\n- a\n\n> q\n").tokens;
+    const out = walk(tokens, { inline: () => undefined });
+    expect(out).toBe(tokens);
+  });
+
+  it("drops a token when the visitor returns null (filter mode)", () => {
+    const tokens = parse("keep **drop**\n").tokens;
+    const out = walk(tokens, {
+      inline(t) {
+        return t.type === TokenType.Strong ? null : undefined;
+      },
+    });
+    const para = out[0];
+    if (para?.type !== TokenType.Paragraph) throw new Error("expected paragraph");
+    expect(para.children.find((c) => c.type === TokenType.Strong)).toBeUndefined();
+    const text = para.children.find((c) => c.type === TokenType.Text);
+    expect(text).toBeDefined();
   });
 });

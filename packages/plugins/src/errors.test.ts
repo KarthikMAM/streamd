@@ -33,18 +33,15 @@ describe("applyPlugins — plugin ABI check", () => {
   });
 
   it("missing-requires error carries plugin name and null schema versions", () => {
-    try {
-      applyPlugins([], [identityPlugin("legacy")]);
-    } catch (err) {
-      const e = err as StreamdPluginAbiError;
-      expect(e.kind).toBe("missing-requires");
-      expect(e.pluginName).toBe("legacy");
-      expect(e.expected).toBeNull();
-      expect(e.actual).toBeNull();
-      expect(e.source).toBe("@streamd/plugins");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => applyPlugins([], [identityPlugin("legacy")])).toThrow(
+      expect.objectContaining({
+        kind: "missing-requires",
+        pluginName: "legacy",
+        expected: null,
+        actual: null,
+        source: "@streamd/plugins",
+      }),
+    );
   });
 
   it("throws StreamdPluginAbiError on schema mismatch", () => {
@@ -54,17 +51,14 @@ describe("applyPlugins — plugin ABI check", () => {
   });
 
   it("token-schema-mismatch error captures expected + actual schema versions", () => {
-    try {
-      applyPlugins([], [identityPlugin("future", { tokenSchema: 999 })]);
-    } catch (err) {
-      const e = err as StreamdPluginAbiError;
-      expect(e.expected).toBe(999);
-      expect(e.actual).toBe(TOKEN_SCHEMA_VERSION);
-      expect(e.pluginName).toBe("future");
-      expect(e.source).toBe("@streamd/plugins");
-      expect(e.kind).toBe("token-schema-mismatch");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => applyPlugins([], [identityPlugin("future", { tokenSchema: 999 })])).toThrow(
+      expect.objectContaining({
+        kind: "token-schema-mismatch",
+        pluginName: "future",
+        expected: 999,
+        actual: TOKEN_SCHEMA_VERSION,
+        source: "@streamd/plugins",
+      }),
+    );
   });
 });

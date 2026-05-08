@@ -127,11 +127,11 @@ describe("streaming invariants — stable-prefix immutability", () => {
 describe("streaming invariants — progressive vs full-document equivalence", () => {
   for (const { name, markdown } of SAMPLES) {
     it(`final streamed tree === single-shot parse for ${name}`, () => {
-      const steps = feedCharacterByCharacter(markdown);
+      // Feed the markdown character by character, carrying the
+      // ParserState forward, then finalize by re-calling parse once
+      // more with the full source. The resulting tree must exactly
+      // match a single-shot parse of the same markdown.
       const fullResult = parse(markdown);
-      const lastStep = steps[steps.length - 1];
-      // The final step's prefix + any post-stable tokens we haven't asserted on
-      // should match the single-shot full parse.
       let state: ParserState | null = null;
       let acc = "";
       for (const ch of markdown) {
@@ -140,7 +140,6 @@ describe("streaming invariants — progressive vs full-document equivalence", ()
       }
       const final = parse(markdown, state);
       expect(canonicalize(final.tokens)).toBe(canonicalize(fullResult.tokens));
-      expect(lastStep).toBeDefined();
     });
   }
 });

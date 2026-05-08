@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `assemble.ts`.
+ *
+ * @module assemble.test
+ */
 import { describe, expect, it } from "vitest";
 import type { Block, BlockKindValue } from "../scanner/block/types";
 import { BlockKind, createBlock } from "../scanner/block/types";

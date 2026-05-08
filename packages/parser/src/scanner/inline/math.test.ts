@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `math.ts`.
+ *
+ * @module math.test
+ */
 import { describe, expect, it } from "vitest";
 import { TokenType } from "../../types/token-type";
 import { scanMathInline } from "./math";

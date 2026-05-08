@@ -22,7 +22,9 @@ describe("measureLatency", () => {
       20,
     );
     expect(calls).toBe(30);
-    expect(stats.medianMs).toBeGreaterThanOrEqual(0);
+    // Percentile ordering is the observable contract: p50 <= p95 <= p99.
+    // (A bare medianMs>=0 assertion would be vacuous — timings are
+    // always non-negative — so the valuable check is the ordering.)
     expect(stats.p95Ms).toBeGreaterThanOrEqual(stats.medianMs);
     expect(stats.p99Ms).toBeGreaterThanOrEqual(stats.p95Ms);
   });
@@ -86,6 +88,9 @@ describe("buildStaticRecord", () => {
     expect(record.p95Ms).toBe(2);
     expect(record.p99Ms).toBe(3);
     expect(record.heapUsedBytes).toBe(4096);
-    expect(record.throughputMbPerS).toBeGreaterThan(0);
+    // Delegates to the canonical throughputMbPerS helper (tested above),
+    // so the exact expected value comes from the same formula. Avoids a
+    // vacuous `> 0` lower bound.
+    expect(record.throughputMbPerS).toBeCloseTo(throughputMbPerS(2048, 1), 10);
   });
 });

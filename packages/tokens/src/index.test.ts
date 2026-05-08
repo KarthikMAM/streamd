@@ -114,44 +114,30 @@ describe("mergeTheme — input validation", () => {
   });
 
   it("error names the caller and kind for base shape failures", () => {
-    try {
-      mergeTheme(null as unknown as Theme, {});
-    } catch (err) {
-      const e = err as StreamdArgumentError;
-      expect(e).toBeInstanceOf(StreamdArgumentError);
-      expect(e.caller).toBe("mergeTheme");
-      expect(e.kind).toBe("invalid-base-theme");
-      expect(e.source).toBe("@streamd/tokens");
-      expect(e.message).toContain("mergeTheme");
-      expect(e.message).toContain("base");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => mergeTheme(null as unknown as Theme, {})).toThrow(StreamdArgumentError);
+    expect(() => mergeTheme(null as unknown as Theme, {})).toThrow(
+      expect.objectContaining({
+        caller: "mergeTheme",
+        kind: "invalid-base-theme",
+        source: "@streamd/tokens",
+        message: expect.stringContaining("base"),
+      }),
+    );
   });
 
   it("error names the caller and kind for override shape failures", () => {
-    try {
-      mergeTheme(lightTheme, null as unknown as object);
-    } catch (err) {
-      const e = err as StreamdArgumentError;
-      expect(e.caller).toBe("mergeTheme");
-      expect(e.kind).toBe("invalid-override");
-      expect(e.source).toBe("@streamd/tokens");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => mergeTheme(lightTheme, null as unknown as object)).toThrow(
+      expect.objectContaining({
+        caller: "mergeTheme",
+        kind: "invalid-override",
+        source: "@streamd/tokens",
+      }),
+    );
   });
 
   it("error mentions the missing key when base is partial", () => {
     const partial = { name: "x", colors: {}, spacing: {}, typography: {} };
-    try {
-      mergeTheme(partial as unknown as Theme, {});
-    } catch (err) {
-      const e = err as StreamdArgumentError;
-      expect(e.message).toContain("radii");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => mergeTheme(partial as unknown as Theme, {})).toThrow(/radii/);
   });
 });
 
@@ -225,16 +211,13 @@ describe("themeToCss — input validation (shape)", () => {
   });
 
   it("uses invalid-theme kind and themeToCss caller", () => {
-    try {
-      themeToCss(null as unknown as Theme);
-    } catch (err) {
-      const e = err as StreamdArgumentError;
-      expect(e.caller).toBe("themeToCss");
-      expect(e.kind).toBe("invalid-theme");
-      expect(e.source).toBe("@streamd/tokens");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => themeToCss(null as unknown as Theme)).toThrow(
+      expect.objectContaining({
+        caller: "themeToCss",
+        kind: "invalid-theme",
+        source: "@streamd/tokens",
+      }),
+    );
   });
 });
 
@@ -313,47 +296,52 @@ describe("themeToCss — unsafe theme values", () => {
     expect(() => themeToCss(corrupted)).toThrow(StreamdArgumentError);
   });
 
+  it("rejects a non-string fontFamily (wrong type)", () => {
+    const corrupted = mergeTheme(lightTheme, {
+      typography: { fontFamily: 42 as unknown as string },
+    });
+    expect(() => themeToCss(corrupted)).toThrow(StreamdArgumentError);
+  });
+
+  it("rejects a non-number weightRegular (wrong type)", () => {
+    const corrupted = mergeTheme(lightTheme, {
+      typography: { weightRegular: "400" as unknown as number },
+    });
+    expect(() => themeToCss(corrupted)).toThrow(StreamdArgumentError);
+  });
+
+  it("rejects a non-number lineHeight (wrong type)", () => {
+    const corrupted = mergeTheme(lightTheme, {
+      typography: { lineHeight: "1.6" as unknown as number },
+    });
+    expect(() => themeToCss(corrupted)).toThrow(StreamdArgumentError);
+  });
+
   it("uses unsafe-theme-value kind and names the offending field", () => {
     const injected = mergeTheme(lightTheme, {
       colors: { text: "red; } body { display: none; } .foo {" },
     });
-    try {
-      themeToCss(injected);
-    } catch (err) {
-      const e = err as StreamdArgumentError;
-      expect(e.caller).toBe("themeToCss");
-      expect(e.kind).toBe("unsafe-theme-value");
-      expect(e.source).toBe("@streamd/tokens");
-      expect(e.message).toContain("colors.text");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => themeToCss(injected)).toThrow(
+      expect.objectContaining({
+        caller: "themeToCss",
+        kind: "unsafe-theme-value",
+        source: "@streamd/tokens",
+        message: expect.stringContaining("colors.text"),
+      }),
+    );
   });
 
   it("reports the path for a nested headingScale failure", () => {
     const corrupted = mergeTheme(lightTheme, {
       typography: { headingScale: [32, Number.NaN, 22, 18, 16, 14] },
     });
-    try {
-      themeToCss(corrupted);
-    } catch (err) {
-      const e = err as StreamdArgumentError;
-      expect(e.message).toContain("headingScale[1]");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => themeToCss(corrupted)).toThrow(/headingScale\[1\]/);
   });
 });
 
 describe("StreamdArgumentError — shape", () => {
   it("is a TypeError subclass", () => {
-    try {
-      themeToCss(null as unknown as Theme);
-    } catch (err) {
-      expect(err).toBeInstanceOf(TypeError);
-      expect(err).toBeInstanceOf(StreamdArgumentError);
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => themeToCss(null as unknown as Theme)).toThrow(TypeError);
+    expect(() => themeToCss(null as unknown as Theme)).toThrow(StreamdArgumentError);
   });
 });

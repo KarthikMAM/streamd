@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 // @vitest-environment happy-dom
 /**
- * Tests for the `useStreamingMarkdown` hook in `@streamd/react-native`.
+ * Tests for the `useStreamingMarkdown` hook in `@streamd/react`.
  *
  * Exercises stateful behaviour (append, reset, monotonic stableCount,
  * reactive parseOptions). Requires a DOM (happy-dom) to mount real
@@ -15,14 +15,14 @@ import { act, createElement, type ReactNode, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useStreamingMarkdown } from "./markdown";
-import type { StreamdMarkdownNativeProps, UseStreamingMarkdownResult } from "./types";
-import { StreamdReactNativeArgumentError } from "./validation";
+import type { StreamdMarkdownProps, UseStreamingMarkdownResult } from "./types";
+import { StreamdReactArgumentError } from "./validation";
 
 // React 18+ expects this flag when test code drives act() manually.
 // See https://reactjs.org/link/react-test-act-environment
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type ParseOpts = StreamdMarkdownNativeProps["parseOptions"];
+type ParseOpts = StreamdMarkdownProps["parseOptions"];
 
 /**
  * Mutable capture record updated by `HookProbe` whenever the hook
@@ -202,13 +202,13 @@ describe("useStreamingMarkdown — basic behaviour (H10)", () => {
     expect(observations[observations.length - 1]).toBeGreaterThan(0);
   });
 
-  it("append rejects non-string chunks with StreamdReactNativeArgumentError", () => {
+  it("append rejects non-string chunks with StreamdReactArgumentError", () => {
     const { probe } = mountHook("");
     const appendNumber = () => (readProbe(probe).append as unknown as (x: unknown) => void)(42);
-    expect(appendNumber).toThrow(StreamdReactNativeArgumentError);
+    expect(appendNumber).toThrow(StreamdReactArgumentError);
 
     const appendNull = () => (readProbe(probe).append as unknown as (x: unknown) => void)(null);
-    expect(appendNull).toThrow(StreamdReactNativeArgumentError);
+    expect(appendNull).toThrow(StreamdReactArgumentError);
     expect(appendNull).toThrow(expect.objectContaining({ kind: "invalid-chunk" }));
   });
 });

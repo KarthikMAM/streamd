@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `code.ts`.
+ *
+ * @module code.test
+ */
 import { describe, expect, it } from "vitest";
 import { TokenType } from "../../types/token-type";
 import { scanCodeSpan } from "./code";

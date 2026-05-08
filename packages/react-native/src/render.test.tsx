@@ -83,6 +83,93 @@ describe("renderReactNative — structural output", () => {
   it("empty input returns null", () => {
     expect(renderReactNative([])).toBeNull();
   });
+
+  it("renders em inline tokens with italic styling", () => {
+    const html = markup(renderReactNative(parse("*em*").tokens));
+    expect(html).toContain("font-style:italic");
+    expect(html).toContain(">em</rn-text>");
+  });
+
+  it("renders strong inline tokens with bold weight", () => {
+    const html = markup(renderReactNative(parse("**st**").tokens));
+    expect(html).toContain("font-weight:700");
+    expect(html).toContain(">st</rn-text>");
+  });
+
+  it("renders strikethrough inline tokens with line-through decoration", () => {
+    const html = markup(renderReactNative(parse("~~gone~~", null, { gfm: true }).tokens));
+    expect(html).toContain("text-decoration-line:line-through");
+    expect(html).toContain(">gone</rn-text>");
+  });
+
+  it("renders inline code spans with monospace family + code-background color", () => {
+    const html = markup(renderReactNative(parse("`code`").tokens));
+    expect(html).toContain("font-family:ui-monospace");
+    expect(html).toContain("background-color:#f6f8fa");
+    expect(html).toContain(">code</rn-text>");
+  });
+
+  it("renders inline HTML as escaped code-styled text (no injection)", () => {
+    const html = markup(renderReactNative(parse("a <span>b</span> c").tokens));
+    // Raw HTML is rendered as escaped text inside a monospace rn-text.
+    // The angle brackets MUST be entity-escaped so the static-markup
+    // serializer doesn't see them as a nested tag.
+    expect(html).toContain("&lt;span&gt;");
+    expect(html).toContain("&lt;/span&gt;");
+    expect(html).not.toContain("<span>b</span>");
+  });
+
+  it("renders a backslash escape as the literal escaped character", () => {
+    const html = markup(renderReactNative(parse("\\*x").tokens));
+    expect(html).toContain(">*x</rn-text>");
+    // The backslash itself is consumed by the escape — it must not
+    // appear in the rendered output.
+    expect(html).not.toContain("\\");
+  });
+
+  it("renders a thematic break as a bordered rn-view between adjacent paragraphs", () => {
+    const html = markup(renderReactNative(parse("a\n\n---\n\nb\n").tokens));
+    // Exactly one rn-view (the hr separator) between the two paragraphs.
+    const viewMatches = html.match(/<rn-view\b/g) ?? [];
+    expect(viewMatches).toHaveLength(1);
+    expect(html).toContain("border-bottom-width:1px");
+    expect(html).toContain(">a</rn-text>");
+    expect(html).toContain(">b</rn-text>");
+  });
+
+  it("renders an HtmlBlock as escaped code-styled text (consistent with inline HTML)", () => {
+    const html = markup(renderReactNative(parse("<div>raw block</div>\n").tokens));
+    // Raw HTML is NOT parsed — the entire block becomes escaped text
+    // inside a monospace rn-text. Tags must be entity-escaped.
+    expect(html).toContain("&lt;div&gt;");
+    expect(html).toContain("raw block");
+    expect(html).toContain("&lt;/div&gt;");
+    expect(html).not.toContain("<div>raw block</div>");
+  });
+
+  it("renders a MathBlock inside a bordered rn-view container", () => {
+    const html = markup(renderReactNative(parse("$$\nE=mc^2\n$$\n", null, { math: true }).tokens));
+    // Math block is wrapped in an rn-view with background + border
+    // radius styles, distinguishing it from plain paragraphs.
+    expect(html).toMatch(/<rn-view style="[^"]*background-color:#f6f8fa[^"]*border-radius/);
+    expect(html).toContain("E=mc^2");
+  });
+
+  it("renders a MathInline inside a monospace rn-text (same styling as code spans)", () => {
+    const html = markup(renderReactNative(parse("a $x$ b", null, { math: true }).tokens));
+    // Inline math uses the same monospace + code-background styling as
+    // inline code. Assert both markers AND the specific inner content.
+    expect(html).toContain("font-family:ui-monospace");
+    expect(html).toContain("background-color:#f6f8fa");
+    expect(html).toContain(">x</rn-text>");
+  });
+
+  it("renders a link inside an rn-pressable with accessibilityRole=link", () => {
+    const html = markup(renderReactNative(parse("[text](/href)").tokens));
+    expect(html).toContain('<rn-pressable accessibilityRole="link"');
+    expect(html).toContain("text-decoration-line:underline");
+    expect(html).toContain(">text</rn-text>");
+  });
 });
 
 describe("renderReactNative — theming", () => {
@@ -123,36 +210,32 @@ describe("renderReactNative — custom components", () => {
 describe("renderReactNative — argument validation (H4 + H16)", () => {
   it("throws StreamdReactNativeArgumentError for unknown token types (kind=unknown-token-type)", () => {
     const bogus: Token = { type: 999 as unknown as typeof TokenType.Text, content: "x" } as Token;
-    try {
-      renderReactNative([bogus] as TokensList);
-      expect.fail("expected renderReactNative to throw");
-    } catch (err) {
-      expect(err).toBeInstanceOf(StreamdReactNativeArgumentError);
-      const thrown = err as StreamdReactNativeArgumentError;
-      expect(thrown.kind).toBe("unknown-token-type");
-      expect(thrown.caller).toBe("renderBlock");
-      expect(thrown.source).toBe("@streamd/react-native");
-    }
+    expect(() => renderReactNative([bogus] as TokensList)).toThrow(StreamdReactNativeArgumentError);
+    expect(() => renderReactNative([bogus] as TokensList)).toThrow(
+      expect.objectContaining({
+        kind: "unknown-token-type",
+        caller: "renderBlock",
+        source: "@streamd/react-native",
+      }),
+    );
   });
 
   it("throws StreamdReactNativeArgumentError when tokens is not an array (kind=tokens-not-array)", () => {
-    try {
-      renderReactNative(null as unknown as TokensList);
-      expect.fail("expected renderReactNative to throw");
-    } catch (err) {
-      expect(err).toBeInstanceOf(StreamdReactNativeArgumentError);
-      expect((err as StreamdReactNativeArgumentError).kind).toBe("tokens-not-array");
-    }
+    expect(() => renderReactNative(null as unknown as TokensList)).toThrow(
+      StreamdReactNativeArgumentError,
+    );
+    expect(() => renderReactNative(null as unknown as TokensList)).toThrow(
+      expect.objectContaining({ kind: "tokens-not-array" }),
+    );
   });
 
   it("StreamdMarkdownNative throws when neither source nor tokens supplied", () => {
-    try {
-      renderToStaticMarkup(createElement(StreamdMarkdownNative, {}));
-      expect.fail("expected StreamdMarkdownNative to throw");
-    } catch (err) {
-      expect(err).toBeInstanceOf(StreamdReactNativeArgumentError);
-      expect((err as StreamdReactNativeArgumentError).kind).toBe("missing-input");
-    }
+    expect(() => renderToStaticMarkup(createElement(StreamdMarkdownNative, {}))).toThrow(
+      StreamdReactNativeArgumentError,
+    );
+    expect(() => renderToStaticMarkup(createElement(StreamdMarkdownNative, {}))).toThrow(
+      expect.objectContaining({ kind: "missing-input" }),
+    );
   });
 });
 

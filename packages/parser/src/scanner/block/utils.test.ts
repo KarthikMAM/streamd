@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `utils.ts`.
+ *
+ * @module utils.test
+ */
 import { describe, expect, it } from "vitest";
 import { countIndent, findLineEndFast, isBlankRange, isSpaceOrTab, nextLine } from "./utils";
 

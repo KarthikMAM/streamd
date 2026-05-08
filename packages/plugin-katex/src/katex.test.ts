@@ -225,20 +225,23 @@ describe("katex transform — throwOnError + macros", () => {
 
   it("rewraps KaTeX throws as StreamdPluginAbiError when throwOnError is true", async () => {
     const { katex } = await import("./index");
-    mocks.renderToString.mockImplementationOnce(() => {
+    // NB: mockImplementation (not Once) — the canonical toThrow assertion
+    // pattern in testing-standards.md §5 invokes the SUT twice, so the
+    // underlying mock must stay active across both calls.
+    mocks.renderToString.mockImplementation(() => {
       throw new Error("ParseError: unknown macro");
     });
     const plugin = katex({ throwOnError: true });
     const tokens = parse("$\\bad$\n", null, { math: true }).tokens;
-    try {
-      applyPlugins(tokens, [plugin]);
-      throw new Error("expected throw");
-    } catch (err) {
-      expect(err).toBeInstanceOf(StreamdPluginAbiError);
-      expect((err as StreamdPluginAbiError).kind).toBe("transform-failed");
-      expect((err as StreamdPluginAbiError).pluginName).toBe("katex");
-      expect((err as StreamdPluginAbiError).cause).toBeInstanceOf(Error);
-    }
+    expect(() => applyPlugins(tokens, [plugin])).toThrow(StreamdPluginAbiError);
+    expect(() => applyPlugins(tokens, [plugin])).toThrow(
+      expect.objectContaining({
+        kind: "transform-failed",
+        pluginName: "katex",
+        cause: expect.any(Error),
+      }),
+    );
+    mocks.renderToString.mockReset();
   });
 });
 
@@ -247,7 +250,20 @@ describe("katex transform — traversal + idempotence", () => {
     const { katex } = await import("./index");
     const plugin = katex();
     const tokens = parse("$a$ and $b$.\n\n$$c$$\n", null, { math: true }).tokens;
-    applyPlugins(tokens, [plugin]);
+    const out = applyPlugins(tokens, [plugin]).tokens;
+    // Observable outcome: every MathInline and MathBlock token carries
+    // a rendered meta.html. The mock call count is a corroborating
+    // contract check, not the primary assertion — see
+    // testing-standards.md §7 (mock-only assertions are fluff).
+    const para = out[0] as ParagraphToken;
+    const inlines = para.children.filter((c) => c.type === TokenType.MathInline);
+    expect(inlines).toHaveLength(2);
+    for (const m of inlines) {
+      expect((m as MathInlineToken).meta?.html).toContain('class="katex-inline"');
+    }
+    const block = out[1] as MathBlockToken;
+    expect(block.type).toBe(TokenType.MathBlock);
+    expect(block.meta?.html).toContain('class="katex-block"');
     expect(mocks.renderToString).toHaveBeenCalledTimes(3);
   });
 

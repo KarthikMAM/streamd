@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `para.ts`.
+ *
+ * @module para.test
+ */
 import { describe, expect, it } from "vitest";
 import { scanParagraph } from "./para";
 import type { Block } from "./types";

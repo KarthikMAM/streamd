@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `container.ts`.
+ *
+ * @module container.test
+ */
 import { describe, expect, it } from "vitest";
 import { scanBlockquote } from "./container";
 import { BlockKind } from "./types";

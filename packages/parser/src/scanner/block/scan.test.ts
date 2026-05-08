@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `scan.ts`.
+ *
+ * @module scan.test
+ */
 import { describe, expect, it } from "vitest";
 import { scanBlocks } from "./scan";
 import { BlockKind } from "./types";

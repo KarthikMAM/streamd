@@ -31,15 +31,11 @@ describe("renderHtml — input validation", () => {
   });
 
   it("error message includes caller name and received type", () => {
-    try {
-      renderHtml(42 as unknown as Array<never>);
-    } catch (err) {
-      const e = err as StreamdHtmlArgumentError;
-      expect(e.message).toContain("renderHtml");
-      expect(e.message).toContain("number");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => renderHtml(42 as unknown as Array<never>)).toThrow(
+      expect.objectContaining({
+        message: expect.stringMatching(/renderHtml.*number|number.*renderHtml/),
+      }),
+    );
   });
 });
 
@@ -60,26 +56,17 @@ describe("streamHtml — input validation", () => {
 
 describe("StreamdHtmlArgumentError — shape", () => {
   it("exposes a stable kind discriminator", () => {
-    try {
-      renderHtml(null as unknown as Array<never>);
-    } catch (err) {
-      const e = err as StreamdHtmlArgumentError;
-      expect(e.kind).toBe("tokens-not-array");
-      expect(e.source).toBe("@streamd/html");
-      expect(e.caller).toBe("renderHtml");
-      expect(e.name).toBe("StreamdHtmlArgumentError");
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => renderHtml(null as unknown as Array<never>)).toThrow(
+      expect.objectContaining({
+        kind: "tokens-not-array",
+        source: "@streamd/html",
+        caller: "renderHtml",
+        name: "StreamdHtmlArgumentError",
+      }),
+    );
   });
 
   it("is a TypeError subclass", () => {
-    try {
-      renderHtml(null as unknown as Array<never>);
-    } catch (err) {
-      expect(err).toBeInstanceOf(TypeError);
-      return;
-    }
-    throw new Error("expected throw");
+    expect(() => renderHtml(null as unknown as Array<never>)).toThrow(TypeError);
   });
 });

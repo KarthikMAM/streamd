@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `container.ts`.
+ *
+ * @module container.test
+ */
 import { describe, expect, it } from "vitest";
 import { BlockKind, createBlock } from "../scanner/block/types";
 import type { LinkReference } from "../types/internal";
@@ -32,7 +37,9 @@ describe("assembleBlockquote", () => {
     );
     expect(token.type).toBe(TokenType.Blockquote);
     if (token.type === TokenType.Blockquote) {
-      expect(token.children.length).toBeGreaterThan(0);
+      // "Hello world" → single paragraph child.
+      expect(token.children).toHaveLength(1);
+      expect(token.children[0]?.type).toBe(TokenType.Paragraph);
     }
   });
 

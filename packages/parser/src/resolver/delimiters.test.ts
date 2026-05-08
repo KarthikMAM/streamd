@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `delimiters.ts`.
+ *
+ * @module delimiters.test
+ */
 import { describe, expect, it } from "vitest";
 import type { InlineNode } from "../types/internal";
 import { TokenType } from "../types/token-type";
@@ -163,12 +168,20 @@ describe("resolveDelimiters", () => {
   });
 
   it("should handle closer with remaining count after match", () => {
+    // Opener has 2 stars, closer has 3 stars — matchCount=2 pairs them as
+    // Strong emphasis wrapping "foo". The closer's remaining 1 star becomes
+    // a leftover Text node. Expected output: [Strong(Text "foo"), Text "*"].
     const nodes: Array<InlineNode> = [
-      delimNode(0x2a, 1, true, false, 0),
-      textNode("foo", 1),
-      delimNode(0x2a, 3, true, true, 4),
+      delimNode(0x2a, 2, true, false, 0),
+      textNode("foo", 2),
+      delimNode(0x2a, 3, true, true, 5),
     ];
     const result = resolveDelimiters(nodes, 3, false);
-    expect(result.length).toBeGreaterThan(0);
+    expect(result).toHaveLength(2);
+    expect(result[0]?.type).toBe(TokenType.Strong);
+    expect(result[1]?.type).toBe(TokenType.Text);
+    if (result[1]?.type === TokenType.Text) {
+      expect(result[1].content).toBe("*");
+    }
   });
 });

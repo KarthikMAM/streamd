@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `token-factory.ts`.
+ *
+ * @module token-factory.test
+ */
 import { describe, expect, it } from "vitest";
 import { TokenType } from "../types/token-type";
 import {

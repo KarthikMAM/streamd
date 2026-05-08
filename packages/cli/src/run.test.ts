@@ -162,6 +162,19 @@ describe("run — binary / typed-array stdin", () => {
     expect(code).toBe(0);
     expect(collect(stdout)).toBe("<h1>hello</h1>\n");
   });
+
+  it("coerces non-string non-Uint8Array stdin chunks via String()", async () => {
+    // Node streams normally emit string or Buffer; exotic sources can
+    // emit other types (e.g. an iterator of Number or a custom object
+    // with a toString()). decodeChunk falls back to String(chunk).
+    const obj = { toString: () => "# from-object\n" };
+    const stdin = Readable.from([obj as unknown as string]);
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    const code = await run(["--stream", "off"], { stdin, stdout, stderr });
+    expect(code).toBe(0);
+    expect(collect(stdout)).toBe("<h1>from-object</h1>\n");
+  });
 });
 
 /**

@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `escape.ts`.
+ *
+ * @module escape.test
+ */
 import { describe, expect, it } from "vitest";
 import { TokenType } from "../../types/token-type";
 import { scanEscape } from "./escape";

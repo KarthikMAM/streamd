@@ -9,10 +9,17 @@ import { describe, expect, it } from "vitest";
 import { renderThemeStylesheet, streamHtml } from "./streaming";
 
 describe("streamHtml", () => {
-  it("renders full source on a one-shot call", () => {
+  it("renders full source on a one-shot call and returns a usable state", () => {
+    // One-shot render: correct HTML emitted, AND the returned state
+    // can be threaded into a second streaming call to extend the
+    // document without re-parsing from scratch.
     const r = streamHtml("# hi\n", null);
     expect(r.html).toBe("<h1>hi</h1>\n");
-    expect(r.state).toBeTruthy();
+    // Observable proof the state is usable: a follow-up call extends
+    // the same document with a paragraph and produces the expected
+    // composite HTML.
+    const r2 = streamHtml("# hi\nfollow\n", r.state);
+    expect(r2.html).toBe("<h1>hi</h1>\n<p>follow</p>\n");
   });
 
   it("produces the same final HTML when called incrementally", () => {

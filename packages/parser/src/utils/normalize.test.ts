@@ -1,3 +1,8 @@
+/**
+ * Unit tests for `normalize.ts`.
+ *
+ * @module normalize.test
+ */
 import { describe, expect, it } from "vitest";
 import { normalizeLabel, unescapeString } from "./normalize";
 
