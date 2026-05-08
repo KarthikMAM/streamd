@@ -119,7 +119,7 @@ describe("renderReactNative — accessibility (H11)", () => {
 
   it("task-list item accessibilityState reflects checked=true / disabled=true", () => {
     const defaults = createDefaultComponents(lightTheme);
-    const ListItemFn = unwrapMemo(defaults.listItem);
+    const ListItemFn = unwrapMemo(defaults.list_item);
     const element = ListItemFn({
       checked: true,
       ordered: false,
@@ -139,7 +139,7 @@ describe("renderReactNative — accessibility (H11)", () => {
 
   it("task-list item accessibilityState reflects checked=false when unchecked", () => {
     const defaults = createDefaultComponents(lightTheme);
-    const ListItemFn = unwrapMemo(defaults.listItem);
+    const ListItemFn = unwrapMemo(defaults.list_item);
     const element = ListItemFn({
       checked: false,
       ordered: false,
@@ -157,7 +157,7 @@ describe("renderReactNative — accessibility (H11)", () => {
 
   it("non-task list item does not attach accessibilityState to the marker", () => {
     const defaults = createDefaultComponents(lightTheme);
-    const ListItemFn = unwrapMemo(defaults.listItem);
+    const ListItemFn = unwrapMemo(defaults.list_item);
     const element = ListItemFn({
       checked: null,
       ordered: false,

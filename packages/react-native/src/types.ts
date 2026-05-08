@@ -126,25 +126,25 @@ export interface Components {
   /** Custom list container component. */
   readonly list?: ComponentType<ListProps>;
   /** Custom list-item component. */
-  readonly listItem?: ComponentType<ListItemProps>;
+  readonly list_item?: ComponentType<ListItemProps>;
   /** Custom heading component. */
   readonly heading?: ComponentType<HeadingProps>;
   /** Custom paragraph component. */
   readonly paragraph?: ComponentType<BaseProps>;
   /** Custom fenced/indented code-block component. */
-  readonly codeBlock?: ComponentType<CodeBlockProps>;
+  readonly code_block?: ComponentType<CodeBlockProps>;
   /** Custom horizontal-rule (thematic break) component. */
   readonly hr?: ComponentType<Record<never, never>>;
   /** Custom GFM table component. */
   readonly table?: ComponentType<TableProps>;
   /** Custom display-math block component. */
-  readonly mathBlock?: ComponentType<MathProps>;
+  readonly math_block?: ComponentType<MathProps>;
   /** Custom plain-text component. */
   readonly text?: ComponentType<{ readonly content: string }>;
   /** Custom hard-break component. */
   readonly hardbreak?: ComponentType<Record<never, never>>;
   /** Custom inline code-span component. */
-  readonly codeSpan?: ComponentType<CodeSpanProps>;
+  readonly code_span?: ComponentType<CodeSpanProps>;
   /** Custom emphasis (italic) component. */
   readonly em?: ComponentType<BaseProps>;
   /** Custom strong (bold) component. */
@@ -158,7 +158,7 @@ export interface Components {
   /** Custom backslash-escape component. */
   readonly escape?: ComponentType<{ readonly content: string }>;
   /** Custom inline-math component. */
-  readonly mathInline?: ComponentType<MathProps>;
+  readonly math_inline?: ComponentType<MathProps>;
 }
 
 /** Options accepted by `renderReactNative`. All fields optional. */

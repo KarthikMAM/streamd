@@ -48,7 +48,7 @@ a `streamd` CLI that glues everything together for stdin/stdout use.
 | [`@streamd/react`](packages/react) | React renderer with `<StreamdMarkdown>` + `useStreamingMarkdown` hook |
 | [`@streamd/react-native`](packages/react-native) | React Native renderer with `<StreamdMarkdownNative>` + `useStreamingMarkdown` hook |
 | [`@streamd/plugins`](packages/plugins) | Plugin pipeline with five built-ins (`sanitize`, `headingAnchors`, `linkAttributes`, `highlightCode`, `frontmatter`) and a mandatory ABI check |
-| [`@streamd/plugin-shiki`](packages/plugin-shiki) | [Shiki](https://shiki.style/) syntax-highlighter adapter — async factory, emits `meta.html` |
+| [`@streamd/plugin-shiki`](packages/plugin-shiki) | [Shiki](https://shiki.style/) syntax-highlighter adapter — async factory, emits structured `meta.highlight` |
 | [`@streamd/cli`](packages/cli) | `streamd` CLI — stream stdin through parse + render + plugins to stdout |
 
 Demos live in [`apps/html-demo`](apps/html-demo),
@@ -136,6 +136,34 @@ export function LiveResponse() {
 `@streamd/react-native` exposes the identical `useStreamingMarkdown`
 hook with the same signature, paired with `<StreamdMarkdownNative>`.
 
+### Streaming reveal
+
+The React and React Native renderers include a streaming reveal layer
+that animates new words as they arrive from the LLM. Wrap your
+renderer in `<StreamingRevealProvider>` and new text content fades /
+slides / blurs in at word granularity:
+
+```tsx
+import { StreamdMarkdown } from "@streamd/react";
+import { StreamingRevealProvider } from "@streamd/react/streaming";
+
+function LiveResponse({ tokens, isStreaming }) {
+  return (
+    <StreamingRevealProvider
+      config={{ isStreaming, granularity: "word", textMode: "smoothed", animation: "fade" }}
+    >
+      <StreamdMarkdown tokens={tokens} />
+    </StreamingRevealProvider>
+  );
+}
+```
+
+Sixteen animation presets are available: `fade`, `fade-up`,
+`fade-down`, `slide-in-left`, `slide-in-right`, `slide-up`,
+`slide-down`, `scale-up`, `scale-down`, `blur`, `blur-fade`,
+`blur-up`, `typewriter`, `shimmer`, `ripple`, `none`. The reveal
+layer is purely a UX concern — the parser knows nothing about it.
+
 ### Plugins + adapters
 
 ```ts
@@ -153,18 +181,14 @@ const shikiPlugin = await shiki({
 const { tokens } = parse(userMarkdown, null, { gfm: true });
 const html = renderHtml(tokens, {
   plugins: [shikiPlugin, headingAnchors(), linkAttributes(), sanitize()],
-  // Required opt-in: lets the renderer splice Shiki's pre-rendered
-  // `meta.html` verbatim. Leave `false` (default) for untrusted plugins.
-  allowDangerousMetaHtml: true,
 });
 ```
 
-Both [`@streamd/plugin-shiki`](packages/plugin-shiki) and custom math
-component overrides (see [Math rendering](#math-rendering) below)
-demonstrate the extension points. `plugin-shiki` writes pre-rendered
-HTML to `token.meta.html`. Renderers ignore that field unless
-`allowDangerousMetaHtml: true` is set — see the
-[Security model](#security-model) below for the full contract.
+`@streamd/plugin-shiki` attaches structured `meta.highlight` data to
+`CodeBlock` tokens. The default `code_block` component reads this data
+and renders styled `<span>` elements — no raw HTML splicing. Override
+`components.math_block` / `components.math_inline` with a KaTeX
+component to render TeX (see [Math rendering](#math-rendering) below).
 
 ### CLI
 
@@ -213,48 +237,29 @@ choice rather than a plugin concern.
 
 ## Security model
 
-streamd takes three orthogonal precautions against HTML-injection
-classes of bugs. All three are enforced at the library boundary — not
+streamd takes two orthogonal precautions against HTML-injection
+classes of bugs. Both are enforced at the library boundary — not
 at documentation-read time.
 
-### 1. `sanitize()` must be last in the plugin pipeline
+### 1. No HTML tokens — injection eliminated by construction
+
+The parser does not emit `HtmlBlock` or `HtmlInline` tokens. Source
+HTML blocks are dropped; inline `<tag>` sequences become literal text
+in `TextToken.content`. There is no `meta.html` field — plugins cannot
+splice raw HTML into the token tree. This eliminates the entire class
+of injection vulnerabilities that arise from passing untrusted HTML
+through a markdown pipeline.
+
+### 2. `sanitize()` — URL-scheme and attribute allowlist
 
 `@streamd/plugins`' `sanitize()`:
 
-- drops `HtmlBlock` / `HtmlInline` tokens (raw HTML never reaches the
-  renderer),
 - rewrites `Link.href` / `Image.src` schemes to a safe allowlist
   (`http:`, `https:`, `mailto:`, `tel:`, `ftp:`),
-- strips `token.meta.html` unless `allowRawHtml: true` is explicitly
-  set,
 - filters `token.meta.attrs` keys through the shared
   [`isSafeAttributeName`](packages/plugins/src/builtins/safe-attrs.ts)
   allowlist (`class`, `id`, `title`, `alt`, `lang`, `dir`, `role`,
   `href`, `src`, plus the `data-*` / `aria-*` prefix families).
-
-`applyPlugins` throws `StreamdPluginAbiError` (`kind:
-"sanitize-not-last"`) at load time if any plugin appears after
-`sanitize()`. A plugin placed after the sanitizer could re-introduce
-raw HTML or reinstate stripped attributes, so the pipeline order is a
-contract — not a hint.
-
-### 2. `allowDangerousMetaHtml` is opt-in on every renderer
-
-Some plugins (`highlightCode`, `@streamd/plugin-shiki`) emit
-pre-rendered HTML through `token.meta.html`. Renderers ignore this
-field by default. The caller must explicitly opt in:
-
-| Renderer | Opt-in |
-|---|---|
-| `@streamd/html` | `renderHtml(tokens, { allowDangerousMetaHtml: true })` |
-| `@streamd/react` | `<StreamdMarkdown ... allowDangerousMetaHtml />` |
-| `@streamd/react-native` | `<StreamdMarkdownNative ... allowDangerousMetaHtml />` (forwarded to custom `codeBlock` overrides only; the default RN components always ignore raw HTML) |
-| `@streamd/cli` | `--allow-dangerous-meta-html` |
-
-The flag trusts *every* plugin in the current pipeline to produce safe
-HTML. Only flip it on when you control every plugin — a Shiki
-integration you vetted is fine; an extension someone installed from a
-config file is not.
 
 ### 3. `Plugin.requires.tokenSchema` is mandatory
 
@@ -290,10 +295,12 @@ open a public issue for a suspected security bug.
 | GFM (tables, strike, task, autolink) | ✓ | ✓ | ✓ |
 | Math (`$…$`, `$$…$$`) | ✓ | ✓ | ✓ |
 | Streaming state (`parse(src, state)`) | ✓ | ✓ (`useStreamingMarkdown`) | ✓ (`useStreamingMarkdown`) |
+| Streaming reveal (word-level animation) | — | ✓ (`StreamingRevealProvider`) | ✓ (`StreamingRevealProvider`) |
 | Theming | CSS vars via `renderThemeStylesheet` | `<ThemeProvider>` + CSS vars | `<ThemeProvider>` + StyleSheet |
 | Plugins (shared pipeline) | ✓ | ✓ | ✓ |
-| Syntax highlighting via adapter | ✓ (`@streamd/plugin-shiki` + `allowDangerousMetaHtml`) | ✓ (same) | ✓ via custom `codeBlock` override (same flag) |
-| Math rendering via adapter | ✓ (component override calling KaTeX) | ✓ (same) | ✓ via custom `mathBlock` override |
+| Syntax highlighting via `meta.highlight` | ✓ (`@streamd/plugin-shiki`) | ✓ (same) | ✓ (same) |
+| Math rendering via component override | ✓ (`components.math_block`) | ✓ (same) | ✓ (same) |
+| Component overrides | ✓ (`components` map) | ✓ (`components` prop) | ✓ (`components` prop) |
 | Accessibility attrs | `role="checkbox"` + `aria-checked` + `aria-disabled` on task items; `role="region"` + `aria-label` on code blocks | same as HTML | `accessibilityRole="header"` + `accessibilityLabel` on headings; `accessibilityRole="checkbox"` + `accessibilityState` on task items |
 | Runtime input validation | `StreamdHtmlArgumentError` | `StreamdReactArgumentError` | `StreamdReactNativeArgumentError` |
 

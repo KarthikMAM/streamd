@@ -196,7 +196,9 @@ describe("renderReactNative — custom components", () => {
       capturedHighlight = props.highlight;
       return createElement("rn-custom-code", null, props.content);
     };
-    const html = markup(renderReactNative(tokens, { components: { codeBlock: CaptureCodeBlock } }));
+    const html = markup(
+      renderReactNative(tokens, { components: { code_block: CaptureCodeBlock } }),
+    );
     expect(html).toContain("<rn-custom-code");
     expect(capturedHighlight).toEqual({
       lines: [[{ text: "let x=1;", color: "#ff0000" }]],

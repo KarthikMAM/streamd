@@ -11,132 +11,73 @@ and governance docs.
 The format is loosely [Keep a Changelog](https://keepachangelog.com/)
 with sections keyed on the event type.
 
-## Unreleased
+## Unreleased — LC-Parity Refactor (0.x breaking bump)
+
+Comprehensive refactor adopting four ideas from LeverageCommons:
+string-discriminated tokens, component-owned rendering, streaming
+reveal, and parser polish. See
+[ADR 0004](docs/adr/0004-lc-parity-refactor.md) for the full design.
 
 ### Breaking
-- `Plugin.requires.tokenSchema` is now mandatory on every plugin.
-  `applyPlugins` throws `StreamdPluginAbiError` with
-  `kind: "missing-requires"` when the declaration is absent and
-  `kind: "token-schema-mismatch"` when the declared version does not
-  match the parser's `TOKEN_SCHEMA_VERSION`. Existing plugins that
-  omitted the field must import `TOKEN_SCHEMA_VERSION` from
-  `@streamd/parser` and declare `requires: { tokenSchema: TOKEN_SCHEMA_VERSION }`.
-- `sanitize()` must be the final entry in the plugin pipeline.
-  `applyPlugins` throws `StreamdPluginAbiError` with
-  `kind: "sanitize-not-last"` when any plugin appears after
-  `sanitize()`. Reorder existing pipelines so that `sanitize()` is the
-  last entry.
-- Plugin-attached `token.meta.html` is no longer rendered by default.
-  The HTML, React, and React Native renderers now ignore `meta.html`
-  unless `allowDangerousMetaHtml: true` is passed explicitly. Callers
-  relying on `@streamd/plugins`' `highlightCode`,
-  `@streamd/plugin-shiki`, or `@streamd/plugin-katex` must opt in via
-  the renderer option or the CLI `--allow-dangerous-meta-html` flag.
+
+- **Token schema 2**: `TOKEN_SCHEMA_VERSION` bumps from 1 to 2.
+  Token `.type` fields are now string literals (`"paragraph"`,
+  `"code_block"`, etc.) instead of integers. Plugins targeting
+  schema 1 throw `StreamdPluginAbiError`.
+- **Removed tokens**: `HtmlBlock`, `HtmlInline`, `Softbreak` are
+  gone. Source HTML blocks are dropped; inline HTML becomes literal
+  text; paragraph newlines collapse into `TextToken.content`.
+- **Removed `CodeBlock.info`**: use `token.lang` instead.
+- **Removed `allowDangerousMetaHtml`**: the prop, CLI flag, and
+  `sanitize-not-last` ABI error kind are all deleted. No `meta.html`
+  field exists.
+- **Removed `@streamd/plugin-katex`**: KaTeX is now a component
+  override — pass a custom `math_block` / `math_inline` component.
+- **Component override keys**: all three renderers use snake_case
+  keys matching token `.type` discriminants (`code_block`,
+  `math_block`, `list_item`, `code_span`, `math_inline`).
 
 ### Added
-- `@streamd/plugin-shiki` — Shiki syntax-highlighter adapter. Async
-  factory, bundled grammar and theme loading, per-block language
-  detection with configurable `onUnknownLang` behaviour, dual-theme
-  output via Shiki's light/dark split.
-- `@streamd/plugin-katex` — KaTeX math-renderer adapter. Synchronous
-  factory, inline / display / auto modes, macros pass-through,
-  `throwOnError` plumbed through to KaTeX.
-- `@streamd/cli` — `streamd` CLI. `--stream {auto|delta|full|off}`
-  streaming modes, `--theme {light|dark|none}` inline theme CSS,
-  `--gfm`, `--math`, `--anchors`, `--link-attrs`,
-  `--sanitize` / `--no-sanitize`, `--allow-dangerous-meta-html`,
-  `--class-prefix`, `--wrap-root`, `--xhtml` / `--no-xhtml`, typed exit
-  codes, and a programmatic `run()` API for tests and downstream
-  tools.
-- `useStreamingMarkdown` hook on `@streamd/react-native` — same
-  signature as the `@streamd/react` hook (`(initialSource, parseOptions)`
-  → `{ tokens, stableCount, append, reset }`). Pairs with
-  `<StreamdMarkdownNative>` the same way the React hook pairs with
-  `<StreamdMarkdown>`.
-- React 18 concurrency support — the `react` peer dependency on
-  `@streamd/react` and `@streamd/react-native` now accepts both
-  `^18.0.0` and `^19.0.0`.
-- Accessibility attributes emitted by every renderer:
-  - HTML renderer: `role="checkbox"`, `aria-checked`, and
-    `aria-disabled` on task-list items; `role="region"` and
-    `aria-label="<lang> code block"` on fenced code blocks with a
-    declared language.
-  - React renderer: matching ARIA attributes on the default
-    components, covered by `packages/react/src/a11y.test.tsx`.
-  - React Native renderer: `accessibilityRole="header"` and
-    `accessibilityLabel` on headings, `accessibilityRole="checkbox"`
-    and `accessibilityState={{ checked, disabled: true }}` on task
-    items, covered by `packages/react-native/src/a11y.test.tsx`.
-- Governance docs (`CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`).
-- ADR process under `docs/adr/` with three initial entries (parser perf
-  exceptions, streaming contract, performance baseline governance).
-- RFC template under `docs/rfcs/` for breaking-change proposals.
-- Cross-package error hierarchy rooted at `StreamdArgumentError` in
-  `@streamd/tokens`.
-- Plugin ABI version check (`TOKEN_SCHEMA_VERSION` + `Plugin.requires`).
-- Streaming-equivalence fuzzer in `@streamd/e2e` (`src/fuzzer/`) —
-  generates randomised markdown + chunking schedules and asserts
-  identical token output and renderer output across one-shot and
-  streaming paths.
-- Streaming invariant test suite
-  (`packages/e2e/streaming-invariants.test.ts`).
-- Renderer equivalence contract tests
-  (`packages/e2e/renderer-equivalence.test.ts`).
-- Public-API consumer tests + type-level tests.
-- Per-skip classification in `@streamd/spec` —
-  `SkipClassification` (`documented-limitation` | `fixable` |
-  `known-bug` | `under-investigation`) with optional
-  `docLinkInParserDesign` and `trackingUrl` per cluster, rendered into
-  the spec regression guard's output.
-- Performance baseline (`packages/bench/baseline.json`) with
-  median-of-3 capture and per-record `heapUsedBytes`. Regression gate
-  at ±15% throughput threshold. Wired into CI as a warn-only job.
-- CI jobs: publish-readiness (publint + attw), bundle size budgets,
-  spec conformance regression guard, license compat scan, dead-code
-  scan, circular-dependency scan, package metadata consistency check,
-  relative markdown link checker, perf regression gate.
+
+- **Streaming reveal layer** (`@streamd/react/streaming`,
+  `@streamd/react-native/streaming`): `StreamingRevealProvider`,
+  `Words`, `useShouldStream`. Sixteen animation presets. Word-level
+  granularity with smoothed text mode.
+- **`MemoBlock`** in `@streamd/react`: memoises block tokens by
+  reference identity for zero-cost re-renders of stable content.
+- **`shouldEmitSpace(prev, next)`**: parser-level rule set governing
+  `SpaceToken` emission between blocks.
+- **List-merge streaming fix**: adjacent list tokens arriving in
+  separate chunks are merged into a single `ListToken`.
+- **Structured `meta.highlight`**: `plugin-shiki` now attaches
+  `HighlightData` (typed `ThemedSegment[][]`) instead of raw HTML.
+  Default `code_block` components render styled spans directly.
 
 ### Changed
-- Input validation on every renderer now throws a typed
-  `Streamd*ArgumentError`. `@streamd/html` throws
-  `StreamdHtmlArgumentError`, `@streamd/react` throws
-  `StreamdReactArgumentError`, `@streamd/react-native` throws
-  `StreamdReactNativeArgumentError`, `@streamd/plugins` throws
-  `StreamdPluginAbiError`, `@streamd/plugin-shiki` /
-  `@streamd/plugin-katex` / `@streamd/cli` throw their package-specific
-  errors. All extend `StreamdArgumentError` from `@streamd/tokens`, so
-  a single `catch (err instanceof StreamdArgumentError)` covers every
-  streamd input-validation failure.
-- Spec regression guard now checks pass/fail identity per fixture,
-  not just the overall pass count. A run fails if any previously
-  passing fixture starts failing, or any previously failing fixture
-  starts passing without an accompanying `SKIP_METADATA` update.
-- Published-package `exports` fixed: `import.types` now points at
-  `./dist/index.d.mts` (was an incorrect `./dist/index.d.ts`).
-- `engines.node` normalized to `>=22` across root and all published
-  packages, matching `.nvmrc`.
-- 0.x dependency pins tightened from `^0.x` to `~0.x`.
 
-### Fixed
-- `meta.html` / `meta.attrs` XSS surfaces closed off by default.
-  `sanitize()` strips `token.meta.html` unless `allowRawHtml: true` is
-  set explicitly and filters `token.meta.attrs` through
-  `isSafeAttributeName`. The HTML / React / React Native renderers
-  ignore `meta.html` unless the caller opts in via
-  `allowDangerousMetaHtml`. Before this change a misbehaving
-  highlight plugin could smuggle raw HTML past the sanitizer via
-  `meta.html`.
-- `StreamdPluginAbiError` (`kind: "transform-failed"`) now wraps
-  thrown plugin errors with the plugin name on `pluginName` and the
-  original error on `cause`, instead of surfacing as an unstructured
-  `Error`.
+- `sanitize()` simplified: URL-scheme allowlist + safe-attrs filter
+  only. No longer required to be last in the pipeline.
+- `@streamd/cli`: `--allow-dangerous-meta-html` flag removed.
 
-### Removed
-- Dead exports: `printTable` (bench/runner.ts), `_CC_LOW_SURROGATE_START`
-  (html/escape.ts), `resetAttrCache` (html/render.ts).
-- Dead devDependencies: `react-test-renderer`, `@types/react-test-renderer`,
-  `@streamd/tokens` (from bench), `@streamd/parser` (from demo apps),
-  `@streamd/react-native` (from bench).
+### Performance
+
+- Streaming throughput +50–77% from the incremental list-merge fix
+  (eliminates redundant full-document rescans when list items arrive
+  across chunk boundaries).
+
+### Affected packages
+
+| Package | Bump |
+|---|---|
+| `@streamd/parser` | 0.0.1 → 0.1.0 |
+| `@streamd/tokens` | 0.0.1 → 0.1.0 |
+| `@streamd/plugins` | 0.0.1 → 0.1.0 |
+| `@streamd/plugin-shiki` | 0.0.1 → 0.1.0 |
+| `@streamd/html` | 0.0.1 → 0.1.0 |
+| `@streamd/react` | 0.0.1 → 0.1.0 |
+| `@streamd/react-native` | 0.1.0 → 0.2.0 |
+| `@streamd/cli` | 0.0.1 → 0.1.0 |
+| `@streamd/plugin-katex` | **deleted** |
 
 ---
 

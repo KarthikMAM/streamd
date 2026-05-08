@@ -240,7 +240,7 @@ function renderListItem(
   start: number,
   key: string,
 ): ReactNode {
-  const Component = resolved.components.listItem;
+  const Component = resolved.components.list_item;
   return createElement(
     Component,
     { key, index, ordered, start, checked: token.checked },
@@ -287,7 +287,7 @@ function renderParagraph(token: ParagraphToken, resolved: Resolved, key: string)
  * @returns A React node representing the code block.
  */
 function renderCodeBlock(token: CodeBlockToken, resolved: Resolved, key: string): ReactNode {
-  const Component = resolved.components.codeBlock;
+  const Component = resolved.components.code_block;
   const highlight = token.meta?.highlight;
   const props = highlight
     ? { key, lang: token.lang, content: token.content, highlight }
@@ -344,7 +344,7 @@ function renderTable(token: TableToken, resolved: Resolved, key: string): ReactN
 function renderMathBlock(token: MathBlockToken, resolved: Resolved, key: string): ReactNode {
   if (resolved.math === "none") return null;
   if (resolved.math === "tex-delim") return `$$\n${token.content}$$\n`;
-  const Component = resolved.components.mathBlock;
+  const Component = resolved.components.math_block;
   return createElement(Component, { key, content: token.content });
 }
 
@@ -438,7 +438,7 @@ function renderHardbreak(resolved: Resolved, key: string): ReactNode {
  * @returns A React node representing the inline code.
  */
 function renderCodeSpan(token: CodeSpanToken, resolved: Resolved, key: string): ReactNode {
-  const Component = resolved.components.codeSpan;
+  const Component = resolved.components.code_span;
   return createElement(Component, { key, content: token.content });
 }
 
@@ -538,6 +538,6 @@ function renderEscape(token: EscapeToken, resolved: Resolved, key: string): Reac
 function renderMathInline(token: MathInlineToken, resolved: Resolved, key: string): ReactNode {
   if (resolved.math === "none") return null;
   if (resolved.math === "tex-delim") return `$${token.content}$`;
-  const Component = resolved.components.mathInline;
+  const Component = resolved.components.math_inline;
   return createElement(Component, { key, content: token.content });
 }

@@ -283,18 +283,11 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       },
       paragraphs: {
         annotation: {
-          classification: "known-bug",
+          classification: "fixable",
           notes:
-            "Softbreak-to-text collapse: renderer duplicates text preceding \n in TextToken.content.",
-          trackingUrl: "docs/adr/0004-lc-parity-refactor.md §4.3",
+            'HTML renderer emits tabindex="0" on <pre> for accessibility; spec expects bare <pre>. Paragraph/code-block boundary interaction.',
         },
-        examples: [
-          "0222--paragraphs",
-          "0224--paragraphs",
-          "0225--paragraphs",
-          "0226--paragraphs",
-          "0227--paragraphs",
-        ],
+        examples: ["0227--paragraphs"],
       },
       "block-quotes": {
         annotation: {
@@ -809,18 +802,11 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       },
       paragraphs: {
         annotation: {
-          classification: "known-bug",
+          classification: "fixable",
           notes:
-            "Softbreak-to-text collapse: renderer duplicates text preceding \n in TextToken.content.",
-          trackingUrl: "docs/adr/0004-lc-parity-refactor.md §4.3",
+            'HTML renderer emits tabindex="0" on <pre> for accessibility; spec expects bare <pre>. Paragraph/code-block boundary interaction.',
         },
-        examples: [
-          "0190--paragraphs",
-          "0192--paragraphs",
-          "0193--paragraphs",
-          "0194--paragraphs",
-          "0195--paragraphs",
-        ],
+        examples: ["0195--paragraphs"],
       },
       "tables-extension": {
         annotation: {

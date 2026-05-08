@@ -1,15 +1,15 @@
 {
   "totals": {
     "commonmark 0.31.2": {
-      "passed": 283,
+      "passed": 287,
       "failed": 0,
-      "skipped": 372,
+      "skipped": 368,
       "total": 655
     },
     "gfm 0.29": {
-      "passed": 297,
+      "passed": 301,
       "failed": 0,
-      "skipped": 436,
+      "skipped": 432,
       "total": 733
     }
   },
@@ -236,11 +236,11 @@
       "0219--link-reference-definitions": "skipped",
       "0220--link-reference-definitions": "skipped",
       "0221--paragraphs": "passed",
-      "0222--paragraphs": "skipped",
+      "0222--paragraphs": "passed",
       "0223--paragraphs": "passed",
-      "0224--paragraphs": "skipped",
-      "0225--paragraphs": "skipped",
-      "0226--paragraphs": "skipped",
+      "0224--paragraphs": "passed",
+      "0225--paragraphs": "passed",
+      "0226--paragraphs": "passed",
       "0227--paragraphs": "skipped",
       "0228--paragraphs": "passed",
       "0229--blank-lines": "passed",
@@ -861,11 +861,11 @@
       "0187--link-reference-definitions": "skipped",
       "0188--link-reference-definitions": "passed",
       "0189--paragraphs": "passed",
-      "0190--paragraphs": "skipped",
+      "0190--paragraphs": "passed",
       "0191--paragraphs": "passed",
-      "0192--paragraphs": "skipped",
-      "0193--paragraphs": "skipped",
-      "0194--paragraphs": "skipped",
+      "0192--paragraphs": "passed",
+      "0193--paragraphs": "passed",
+      "0194--paragraphs": "passed",
       "0195--paragraphs": "skipped",
       "0196--paragraphs": "passed",
       "0197--blank-lines": "passed",

@@ -51,11 +51,11 @@ npm run preview --workspace=@streamd/react-native-demo
 The demo passes a `components` prop to `<StreamdMarkdownNative>` with
 two custom components:
 
-- **`codeBlock`** — reads `meta.highlight` (populated by `plugin-shiki`)
+- **`code_block`** — reads `meta.highlight` (populated by `plugin-shiki`)
   and renders per-segment `<Text>` nodes with `color` / `fontStyle` /
   `fontWeight` props. Falls back to plain monospace when no highlight
   data is present.
-- **`mathBlock`** — demonstrates the KaTeX-via-override pattern. The web
+- **`math_block`** — demonstrates the KaTeX-via-override pattern. The web
   path renders raw TeX in a styled container with a "TeX" badge. In a
   production app this component would call `katex.renderToString(content)`
   and inject the result.
@@ -66,8 +66,8 @@ Two paths exist for rendering math in React Native:
 
 | Path | Implementation |
 |------|---------------|
-| **Web** (react-native-web) | Override `mathBlock` / `mathInline` with a component that calls `katex.renderToString(content)` and renders the HTML via a web view or `dangerouslySetInnerHTML`. |
-| **Native** (iOS / Android) | Override `mathBlock` / `mathInline` with a component that uses MathJax + `react-native-svg` to render TeX to SVG elements. |
+| **Web** (react-native-web) | Override `math_block` / `math_inline` with a component that calls `katex.renderToString(content)` and renders the HTML via a web view or `dangerouslySetInnerHTML`. |
+| **Native** (iOS / Android) | Override `math_block` / `math_inline` with a component that uses MathJax + `react-native-svg` to render TeX to SVG elements. |
 
 This demo implements the **web path** end-to-end (simplified — shows raw
 TeX in a styled view rather than calling KaTeX, to avoid adding a heavy
@@ -97,22 +97,17 @@ follow-up.
 
 When `plugin-shiki` is applied to the token pipeline, it attaches
 structured `HighlightData` to `CodeBlock.meta.highlight`. The custom
-`codeBlock` component reads this data and renders colored text segments
+`code_block` component reads this data and renders colored text segments
 directly — no HTML splicing, no `allowDangerousMetaHtml`.
 
-## Component key convention: camelCase
+## Component key convention: snake_case
 
-The `@streamd/react-native` renderer uses **camelCase** component keys
-(`codeBlock`, `mathBlock`, `mathInline`, `listItem`, `codeSpan`, etc.)
-in the `components` override map. This differs from the `@streamd/html`
-and `@streamd/react` renderers which use **snake_case** keys
-(`code_block`, `math_block`, etc.) matching the token `type` string
-discriminants.
-
-The divergence exists because Biome's `useNamingConvention` rule
-enforces camelCase on object property keys in the React Native package.
-A consistency pass to reconcile the key convention across all three
-renderers is tracked as a follow-up.
+All three renderers (`@streamd/html`, `@streamd/react`,
+`@streamd/react-native`) use **snake_case** component keys matching the
+token `.type` string discriminants: `code_block`, `math_block`,
+`math_inline`, `list_item`, `code_span`, etc. This means
+`components.code_block` reads naturally alongside `token.type ===
+"code_block"`.
 
 ## Caveat
 

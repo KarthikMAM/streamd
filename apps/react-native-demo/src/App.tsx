@@ -3,7 +3,7 @@
  *
  * Demonstrates:
  * - Theme switching and streaming parse using native renderer primitives.
- * - Component overrides (`codeBlock`, `mathBlock`) via the `components` prop.
+ * - Component overrides (`code_block`, `math_block`) via the `components` prop.
  * - KaTeX-via-override pattern for math rendering (web path via katex).
  * - `StreamingRevealProvider` with three animation presets (fade, blur, slide-in-left).
  * - `plugin-shiki` integration reading `meta.highlight` for syntax coloring.
@@ -91,7 +91,7 @@ function useStreamingSource(source: string, enabled: boolean): UseStreamingSourc
 }
 
 /**
- * Custom code block component demonstrating the `codeBlock` override.
+ * Custom code block component demonstrating the `code_block` override.
  * Renders `meta.highlight` segments as colored `<Text>` nodes when
  * available; falls back to monospace plain text otherwise.
  *
@@ -111,8 +111,8 @@ function CustomCodeBlock({ lang, content, highlight }: CodeBlockProps): React.Re
                 // biome-ignore lint/suspicious/noArrayIndexKey: highlight segments have no stable ID
                 <Text key={li}>
                   {line.map((seg, si) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: segments lack unique identifiers
                     <Text
+                      // biome-ignore lint/suspicious/noArrayIndexKey: segments lack unique identifiers
                       key={si}
                       style={{
                         color: seg.color ?? "#d4d4d4",
@@ -201,8 +201,8 @@ const MATH_BLOCK_STYLES = StyleSheet.create({
 
 /** Component overrides map passed to the renderer. */
 const COMPONENT_OVERRIDES: Components = {
-  codeBlock: CustomCodeBlock,
-  mathBlock: CustomMathBlock,
+  code_block: CustomCodeBlock,
+  math_block: CustomMathBlock,
 };
 
 /**

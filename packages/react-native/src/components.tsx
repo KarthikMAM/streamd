@@ -257,23 +257,23 @@ export function createDefaultComponents(theme: Theme): Required<Components> {
   return Object.freeze({
     blockquote: Blockquote,
     list: List,
-    listItem: ListItem,
+    list_item: ListItem,
     heading: Heading,
     paragraph: Paragraph,
-    codeBlock: CodeBlock,
+    code_block: CodeBlock,
     hr: Hr,
     table: Table,
-    mathBlock: MathBlock,
+    math_block: MathBlock,
     text: TextNode,
     hardbreak: Hardbreak,
-    codeSpan: CodeSpan,
+    code_span: CodeSpan,
     em: Em,
     strong: Strong,
     strikethrough: Strikethrough,
     link: Link,
     image: Image,
     escape: Escape,
-    mathInline: MathInline,
+    math_inline: MathInline,
   });
 }
 
