@@ -40,6 +40,11 @@ every rule is checked automatically.
 | §11 No unbounded collection growth | Review (not lintable) |  |
 | §13 No required parameters without defaults | Review (not lintable) |  |
 | §14 One assertion per test | Review (not lintable) |  |
+| §14 No `try/catch + throw new Error("expected throw")` | `check-banned.sh` (if added) / code review | Banned per [`testing-standards.md`](.kiro/steering/testing-standards.md) §5 |
+| §14 No `try/catch + expect.fail` in error tests | `check-banned.sh` (if added) / code review | Banned per [`testing-standards.md`](.kiro/steering/testing-standards.md) §5 |
+| §14 Every test file has `@module` JSDoc | Review (not lintable) | Convention per [`testing-standards.md`](.kiro/steering/testing-standards.md) §1 |
+| §14 No `toBeDefined` as sole assertion on typed non-null | Review (not lintable) | Per [`testing-standards.md`](.kiro/steering/testing-standards.md) §4 |
+| §14 No `toContain` on substrings that literally appear in test input | Review (not lintable) | Per [`testing-standards.md`](.kiro/steering/testing-standards.md) §6 |
 | §15 No `print` / `console.log` | Biome | `suspicious/noConsole: { allow: ["warn", "error"] }` |
 | §2.2 No `// TODO`/`HACK` without linked ticket | `check-banned.sh` | grep for `// TODO` without `#N` or `ABC-N` or URL |
 | Other: no `@Suppress` silencing | Biome + grep | `style/noNonNullAssertion`, `check-banned.sh` |
