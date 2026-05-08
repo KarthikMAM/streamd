@@ -57,14 +57,45 @@ Subject is lowercase, imperative, no trailing period, max 72 chars.
 - Include `a changeset` (via `npx changeset`) for any user-facing
   change.
 
-## Testing rules (from steering §14)
+## Testing rules
 
-- Test names describe scenario and outcome, not the method under test:
-  `test_fetchUser_withExpiredToken_throwsUnauthorized`.
-- One logical assertion per test.
-- No network / file I/O in unit tests — mock at the boundary.
-- No shared mutable fixtures.
-- Flaky tests are bugs. Fix the root cause.
+Every test in every package follows
+[`.kiro/steering/testing-standards.md`](.kiro/steering/testing-standards.md).
+Quick summary — the full rulebook covers AAA structure, behaviour-first
+naming, canonical `toThrow` error assertions, tautology detection, test
+doubles policy, fixtures, and the pre-commit checklist.
+
+- File layout: `foo.ts` has a companion `foo.test.ts` in the same
+  directory. Cross-module integration tests live in `packages/e2e/`.
+  Import the SUT directly from the source module, not through the
+  package's public entry point.
+- Every test file opens with a `@module` JSDoc header stating its
+  scope.
+- Every `it()` name states a specific behaviour (`"returns count=2 for
+  two consecutive stars"`). No `"should …"` prefix, no `"works"`, no
+  `"handles X correctly"`.
+- Every test has at least one meaningful `expect(...)`. Tautologies
+  (`expect(true).toBe(true)`, `expect(x).toEqual(x)`) and vacuous
+  tests (`sut(); expect(true).toBe(true)` for coverage only) are
+  defects, not tests.
+- Error assertions use `expect(() => fn()).toThrow(ClassOrMatcher)` —
+  never the hand-rolled `try/catch + return; throw new Error("expected
+  throw")` or `try/catch + expect.fail(...)` patterns.
+- No test interdependence. Each test sets up and tears down its own
+  state.
+- No network calls, file I/O, or database access in unit tests. Mock
+  at the boundary. Prefer dependency injection over module-level
+  mocking.
+- Prefer stubs over mocks. Every mock-interaction assertion must pair
+  with an observable-output assertion on the SUT. The cache-contract
+  exception is documented in
+  [`testing-standards.md`](.kiro/steering/testing-standards.md) §7.
+- Test data is constructed in the test or in a named factory/builder.
+  No shared mutable fixtures.
+- Flaky tests are bugs. Fix the root cause; don't retry.
+
+See [`testing-standards.md`](.kiro/steering/testing-standards.md) for
+the full rulebook and the pre-commit enforcement checklist.
 
 ## Performance exceptions
 
