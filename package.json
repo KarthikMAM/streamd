@@ -54,6 +54,7 @@
     "madge": "^8.0.0",
     "publint": "^0.3.19",
     "size-limit": "^11.2.0",
+    "tsdown": "~0.22.0",
     "turbo": "^2.5.0",
     "typedoc": "^0.28.19",
     "typescript": "^5.9.0",
