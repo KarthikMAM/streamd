@@ -26,7 +26,7 @@ work is O(K) where K is the new byte count.
 
 ## What's in the monorepo
 
-streamd ships as nine small, composable packages:
+streamd ships as eight small, composable packages:
 
 | Package | Purpose |
 |---|---|
@@ -37,7 +37,6 @@ streamd ships as nine small, composable packages:
 | [`@streamd/react-native`](./packages/react-native) | React Native renderer with `Text` / `View` / `Pressable` primitives. |
 | [`@streamd/plugins`](./packages/plugins) | Plugin pipeline with five built-ins (anchors, link attrs, highlight, sanitize, frontmatter). |
 | [`@streamd/plugin-shiki`](./packages/plugin-shiki) | [Shiki](https://shiki.style/) syntax-highlighter adapter. |
-| [`@streamd/plugin-katex`](./packages/plugin-katex) | [KaTeX](https://katex.org/) math-renderer adapter. |
 | [`@streamd/cli`](./packages/cli) | `streamd` stdin → stdout binary with a programmatic API. |
 
 ## What this site contains

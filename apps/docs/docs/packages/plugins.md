@@ -173,9 +173,9 @@ document is free.
 - `sanitize()` is the last line of defence. Place it **last** in the
   pipeline; `applyPlugins` enforces this.
 - `sanitize()` strips `meta.html` by default. Plugins that depend on
-  `meta.html` reaching the renderer (`@streamd/plugin-shiki`,
-  `@streamd/plugin-katex`) need `sanitize({ allowRawHtml: true })`
-  plus `allowDangerousMetaHtml: true` on the renderer — see the
+  `meta.html` reaching the renderer (`@streamd/plugin-shiki`) need
+  `sanitize({ allowRawHtml: true })` plus
+  `allowDangerousMetaHtml: true` on the renderer — see the
   [safe-pipeline recipe](../recipes/sanitize-and-plugins) for the
   full matrix.
 - The `meta.attrs` allowlist is shared with the HTML renderer via

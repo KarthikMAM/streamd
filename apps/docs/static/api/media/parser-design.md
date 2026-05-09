@@ -101,6 +101,17 @@ Fast-path cascade (checked in order):
   5. Full scan       — scanBlocks on active region               O(active_region)
 ```
 
+**Consumer contract — stable vs. speculative tokens.** Each `parse(acc, state, opts)` call returns a `ParseResult` with two fields the consumer must distinguish:
+
+- `result.tokens` — the full token list (completed blocks followed by the active, in-progress block).
+- `result.stableCount` — a prefix length. `result.tokens.slice(0, result.stableCount)` is guaranteed to never change in any subsequent call on this stream; those tokens are finalized.
+
+Tokens at indices `≥ result.stableCount` are **speculative**: they are the parser's best interpretation of the content seen so far, but the active block may be extended, replaced, or structurally re-shaped when more source arrives. For example, a paragraph's trailing `===` on the next line retroactively promotes it to a setext heading; a fenced code block whose closing fence has just arrived is still considered active until a following blank-line or block-start transition confirms closure. The "last completed block" sits inside `stableCount`; the "active block currently being read" sits after it.
+
+This means **per-chunk calls never finalize the trailing block on their own**. Consumers that need a fully-finalized token tree at end-of-stream MUST issue one more `parse(fullSource, state, opts)` call after the last chunk. That call is effectively O(1) when `fullSource.length === state.prevLen` (the diff is empty, no new content to scan) — it simply runs the active-block assembly one more time, this time without any further speculation, and promotes the previously-speculative tail into `stableCount`. The e2e `streamWithSnapshots` helper in the streaming-invariants fuzzer uses exactly this pattern.
+
+Rationale: streaming consumers typically re-render `tokens[stableCount..]` on every chunk and discard the previous speculative output — forcing every per-chunk call to finalize would add cost for the common case (word-by-word LLM streaming) where the trailing block is about to grow further on the next chunk. Deferring finalization to an explicit end-of-stream call keeps the hot path cheap while giving consumers that need a final tree an unambiguous, O(1) way to obtain it.
+
 ### 4.4 Why These Fast Paths Are Safe
 
 Each fast path has a conservative gatekeeper that can produce false negatives (fall back to full scan) but never false positives (miss a structural change). This is the key correctness invariant.
@@ -500,3 +511,6 @@ Spec §2.3 requires replacing U+0000 with U+FFFD. Not yet implemented — low pr
 - **Thread safety**: Module-level shared state. Single-threaded use only.
 - **Forward reference resolution**: Link refs defined after their use don't resolve in earlier emissions.
 - **Paragraph inline re-parse**: O(N_para) when special characters present. Mitigated by text-append fast path for the common case. See §10 for the incremental inline architecture that would eliminate this.
+- **Tab expansion**: Leading tabs are expanded to spaces using a fixed 4-column tab stop at the top of the scanner, not spec §2.2's variable-width expansion. This interacts incorrectly with list-item content indent, indented code detection, and blockquote prefix stripping, causing roughly a dozen CommonMark/GFM "tabs" fixtures to diverge. Fixable — intended to land before the next pass-rate bump.
+- **List-item edge cases**: List-item start detection, marker-width handling, and tight/loose classification diverge from spec §5.2 in roughly a third of the `list-items` and `lists` fixtures. Root cause is the flat scan-to-completion list scanner making locally-optimal decisions that the full container stack would reject (e.g., marker width vs. continuation indent for nested lists, blank-line handling for tight→loose transitions). Under investigation — the scope of the divergence is being narrowed via the `collect-failures.mjs` cluster report; a targeted fix is expected to cover the bulk of both clusters at once.
+- **Setext heading promotion**: Retroactive paragraph→setext-heading promotion diverges from §3.2 in edge cases involving blank lines immediately before the underline, multi-line underlines, and interaction with blockquote lazy continuation. Tracked in a dedicated ticket — this is a known bug rather than a documented trade-off.

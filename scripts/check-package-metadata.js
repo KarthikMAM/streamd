@@ -25,7 +25,6 @@ const PUBLISHED = [
   "react",
   "react-native",
   "plugin-shiki",
-  "plugin-katex",
   "cli",
 ];
 // Pure-ESM packages skip the require.types assertion (no CJS entry by design).

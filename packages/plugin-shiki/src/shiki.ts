@@ -14,31 +14,17 @@
  *
  * For every `CodeBlock` token (at any nesting depth — the
  * `walk()` helper from `@streamd/plugins` descends into blockquotes
- * and list items), the transform calls `highlighter.codeToHtml` and
- * stores the result on `token.meta.html`. Renderers with
- * `allowDangerousMetaHtml: true` splice that HTML verbatim in place
- * of the default `<pre><code>` output.
- *
- * # Security contract
- *
- * The pre-rendered HTML lives in `token.meta.html`. Two things must
- * hold for that HTML to actually reach the page:
- *
- * 1. The caller must set `allowDangerousMetaHtml: true` on the
- *    renderer (or not use `sanitize()` in the pipeline). Shiki's
- *    output is safe by construction — Shiki escapes every code token
- *    and only emits `<pre>`, `<code>`, and `<span>` elements — but
- *    the renderer cannot know that, so the opt-in is required.
- *
- * 2. If `sanitize()` is part of the pipeline, it must be configured
- *    with `{ allowRawHtml: true }` or it will strip `meta.html` as
- *    defense-in-depth against plugins that emit unsafe HTML.
+ * and list items), the transform calls `highlighter.codeToTokens` and
+ * stores the structured result on `token.meta.highlight`. Renderers
+ * read `meta.highlight` and emit styled spans / Text trees directly.
  *
  * @module shiki
  */
 
 import {
   type CodeBlockToken,
+  type HighlightData,
+  type ThemedSegment,
   TOKEN_SCHEMA_VERSION,
   type Token,
   type TokensList,
@@ -49,6 +35,11 @@ import { createHighlighter, type Highlighter, type ThemeRegistrationAny } from "
 import { shikiErrorMessage } from "./messages";
 import type { ShikiPluginOptions, ShikiUnknownLangBehavior } from "./types";
 import { assertShikiOptions, StreamdPluginShikiArgumentError } from "./validation";
+
+/** FontStyle bitmask values from Shiki's vscode-textmate. */
+const FONT_STYLE_ITALIC = 1;
+const FONT_STYLE_BOLD = 2;
+const FONT_STYLE_UNDERLINE = 4;
 
 /**
  * Caller name attached to every argument-error thrown from this
@@ -66,10 +57,6 @@ const PLAINTEXT_LANG = "plaintext";
  * Default language set used when {@link ShikiPluginOptions.langs} is
  * omitted. Covers the mix that LLM-streamed markdown typically emits
  * while keeping the highlighter init cost bounded.
- *
- * Consumers that know their corpus (e.g. docs for a specific
- * language) should pin `langs` for faster startup and smaller
- * highlighter state.
  */
 const DEFAULT_LANGS: ReadonlyArray<string> = [
   "plaintext",
@@ -88,22 +75,16 @@ const DEFAULT_LANGS: ReadonlyArray<string> = [
 
 /**
  * Module-level cache of in-flight / resolved highlighter instances,
- * keyed by the stable serialisation of `(themes, langs)`. Reused
- * across every {@link shiki} call with `cache: true` (the default).
- *
- * Stores the `Promise<Highlighter>` directly so concurrent callers
- * with the same configuration share the single init in flight rather
- * than racing to build duplicates.
+ * keyed by the stable serialisation of `(themes, langs)`.
  */
 const HIGHLIGHTER_CACHE = new Map<string, Promise<Highlighter>>();
 
 /**
- * Resolved options passed around the transform helpers. Narrower
- * than {@link ShikiPluginOptions} — every optional field has been
- * defaulted so downstream code never reads `undefined`.
+ * Resolved options passed around the transform helpers. Every
+ * optional field has been defaulted.
  */
 interface ResolvedOptions {
-  /** Light/dark theme pair passed to Shiki's `codeToHtml`. */
+  /** Light/dark theme pair passed to Shiki's `codeToTokens`. */
   readonly themes: { readonly light: string; readonly dark: string };
   /** Behaviour when a code block's language is not loaded. */
   readonly onUnknownLang: ShikiUnknownLangBehavior;
@@ -114,27 +95,13 @@ interface ResolvedOptions {
  *
  * Validates options, eagerly resolves the Shiki highlighter (awaiting
  * grammar + theme init), then returns a synchronous `Plugin` whose
- * `transform` annotates every `CodeBlock` token's `meta.html` with
- * the highlighter output.
+ * `transform` annotates every `CodeBlock` token's `meta.highlight`
+ * with structured `HighlightData`.
  *
  * @param options See {@link ShikiPluginOptions}. `themes` is required.
- * @returns Promise resolving to a {@link Plugin}. `await` the promise
- *   once at application startup, then pass the resolved plugin into
- *   every renderer that should use it.
- * @throws {StreamdPluginShikiArgumentError} When `options` fail the
- *   factory-boundary validation guards in `./validation`.
- *
- * @example
- * ```ts
- * const shikiPlugin = await shiki({
- *   themes: { light: "github-light", dark: "github-dark" },
- *   langs: ["typescript", "bash"],
- * });
- * const html = renderHtml(tokens, {
- *   plugins: [shikiPlugin],
- *   allowDangerousMetaHtml: true,
- * });
- * ```
+ * @returns Promise resolving to a {@link Plugin}.
+ * @throws {StreamdPluginShikiArgumentError} When `options` fail
+ *   validation guards.
  */
 export async function shiki(options: ShikiPluginOptions): Promise<Plugin> {
   assertShikiOptions(options, CALLER);
@@ -152,13 +119,7 @@ export async function shiki(options: ShikiPluginOptions): Promise<Plugin> {
 }
 
 /**
- * Either return the cached highlighter for the given config or
- * create a fresh one.
- *
- * The cache respects `options.cache`: when `false`, a new highlighter
- * is built on every call. When `true` (the default), the first call
- * for a given `(themes, langs)` key populates the cache and every
- * later call with a matching key resolves to the same highlighter.
+ * Return the cached highlighter or create a fresh one.
  *
  * @param options Validated plugin options.
  * @returns Promise resolving to a ready-to-use highlighter.
@@ -178,11 +139,7 @@ function resolveHighlighter(options: ShikiPluginOptions): Promise<Highlighter> {
 }
 
 /**
- * Compute a stable cache key from the themes + langs.
- *
- * `loadTheme` and `onUnknownLang` are deliberately excluded — the
- * former influences only init, the latter only the transform, so
- * neither affects the resulting highlighter's bytecode.
+ * Compute a stable cache key from themes + langs.
  *
  * @param options Validated plugin options.
  * @returns JSON string usable as a `Map` key.
@@ -200,10 +157,6 @@ function highlighterCacheKey(options: ShikiPluginOptions): string {
 /**
  * Build a fresh Shiki highlighter for the given options.
  *
- * Resolves the themes through {@link ShikiPluginOptions.loadTheme}
- * when supplied; otherwise passes theme names straight through for
- * Shiki's bundled-theme resolution.
- *
  * @param options Validated plugin options.
  * @returns Promise resolving to a ready-to-use highlighter.
  */
@@ -215,15 +168,10 @@ async function buildHighlighter(options: ShikiPluginOptions): Promise<Highlighte
 }
 
 /**
- * Resolve the two theme entries into the shape Shiki's
- * `createHighlighter` accepts.
- *
- * When {@link ShikiPluginOptions.loadTheme} is supplied, the
- * callback is invoked for both `light` and `dark`. Otherwise the raw
- * theme-name strings are passed through for bundled-theme lookup.
+ * Resolve theme entries into the shape Shiki accepts.
  *
  * @param options Validated plugin options.
- * @returns Two-entry array suitable for `createHighlighter({ themes })`.
+ * @returns Array suitable for `createHighlighter({ themes })`.
  */
 async function resolveThemes(
   options: ShikiPluginOptions,
@@ -239,8 +187,7 @@ async function resolveThemes(
 }
 
 /**
- * Normalise caller-supplied options into the internal
- * {@link ResolvedOptions} shape by applying every default.
+ * Normalise options into the internal resolved shape.
  *
  * @param options Validated plugin options.
  * @returns Resolved options for the transform path.
@@ -253,15 +200,13 @@ function resolveOptions(options: ShikiPluginOptions): ResolvedOptions {
 }
 
 /**
- * Walk a full token tree and annotate every `CodeBlock` leaf with the
- * highlighter's HTML. Uses {@link walk} so nested code blocks (inside
- * blockquotes, list items, etc.) are covered.
+ * Walk a full token tree and annotate every `CodeBlock` with
+ * structured highlight data.
  *
  * @param tokens Token tree. Not mutated.
  * @param highlighter Ready Shiki highlighter.
  * @param opts Resolved options.
- * @returns New token tree; structurally equal to input for tokens
- *   that were not annotated (returned by reference).
+ * @returns New token tree with annotated code blocks.
  */
 function highlightTokens(
   tokens: TokensList,
@@ -278,52 +223,91 @@ function highlightTokens(
 }
 
 /**
- * If the code block qualifies, return a shallow copy with
- * `meta.html` populated. Otherwise return the token unchanged.
- *
- * A block qualifies when:
- * - `meta.html` is not already set (previous highlighter wins)
- * - the language resolution (per {@link ResolvedOptions.onUnknownLang})
- *   produces a non-null language string
+ * Annotate a code block with structured `HighlightData` on
+ * `meta.highlight`. Skips blocks that already have highlight data.
  *
  * @param token Input code-block token.
  * @param highlighter Ready Shiki highlighter.
  * @param opts Resolved options.
- * @returns Possibly-annotated token.
+ * @returns Annotated token, or the original if skipped.
  */
 function annotateCodeBlock(
   token: CodeBlockToken,
   highlighter: Highlighter,
   opts: ResolvedOptions,
 ): Token {
-  if (token.meta?.html !== undefined) return token;
+  if (token.meta?.highlight !== undefined) return token;
 
   const lang = resolveLanguage(token.lang, highlighter, opts);
 
   if (lang === null) return token;
 
-  const html = highlighter.codeToHtml(token.content, { lang, themes: opts.themes });
+  const result = highlighter.codeToTokens(token.content, {
+    lang,
+    theme: opts.themes.light,
+  } as Parameters<Highlighter["codeToTokens"]>[1]);
 
-  return { ...token, meta: { ...(token.meta ?? {}), html } };
+  const highlight = buildHighlightData(result.tokens, lang, opts.themes.light);
+
+  return { ...token, meta: { ...(token.meta ?? {}), highlight } };
+}
+
+/**
+ * Convert Shiki's `ThemedToken[][]` into streamd's `HighlightData`.
+ *
+ * @param shikiTokens 2D array of themed tokens from Shiki.
+ * @param lang Effective language used for highlighting.
+ * @param theme Theme key used for highlighting.
+ * @returns Structured highlight data for the token meta.
+ */
+function buildHighlightData(
+  shikiTokens: ReadonlyArray<
+    ReadonlyArray<{ content: string; color?: string; fontStyle?: number }>
+  >,
+  lang: string,
+  theme: string,
+): HighlightData {
+  const lines: Array<Array<ThemedSegment>> = [];
+
+  for (const line of shikiTokens) {
+    const segments: Array<ThemedSegment> = [];
+
+    for (const token of line) {
+      segments.push(mapToken(token));
+    }
+
+    lines.push(segments);
+  }
+
+  return { lines, lang, theme };
+}
+
+/**
+ * Map a single Shiki themed token to a streamd `ThemedSegment`.
+ *
+ * @param token Shiki themed token with content, color, fontStyle.
+ * @returns Streamd themed segment.
+ */
+function mapToken(token: { content: string; color?: string; fontStyle?: number }): ThemedSegment {
+  const style = token.fontStyle ?? 0;
+  const segment: ThemedSegment = { text: token.content };
+
+  if (token.color) (segment as { color: string }).color = token.color;
+  if ((style & FONT_STYLE_BOLD) !== 0) (segment as { bold: boolean }).bold = true;
+  if ((style & FONT_STYLE_ITALIC) !== 0) (segment as { italic: boolean }).italic = true;
+  if ((style & FONT_STYLE_UNDERLINE) !== 0) (segment as { underline: boolean }).underline = true;
+
+  return segment;
 }
 
 /**
  * Decide which language to feed Shiki for a given code-block token.
  *
- * Handles three cases:
- * - Empty `lang` — use the unknown-language behaviour (which also
- *   covers plaintext and ignore).
- * - Loaded language — pass it straight through.
- * - Unknown language (present but not loaded) — also dispatch to the
- *   unknown-language behaviour.
- *
  * @param lang Raw `CodeBlockToken.lang` field.
  * @param highlighter Ready Shiki highlighter.
  * @param opts Resolved options.
- * @returns Shiki language name, or `null` when the token should be
- *   left untouched (`onUnknownLang: "ignore"`).
- * @throws {StreamdPluginShikiArgumentError} With
- *   `kind: "unknown-language"` when `onUnknownLang === "error"`.
+ * @returns Shiki language name, or `null` to skip.
+ * @throws {StreamdPluginShikiArgumentError} On `onUnknownLang: "error"`.
  */
 function resolveLanguage(
   lang: string,
@@ -341,12 +325,11 @@ function resolveLanguage(
 }
 
 /**
- * Apply {@link ResolvedOptions.onUnknownLang} when the raw language
- * is missing or not loaded.
+ * Apply the unknown-language behaviour.
  *
  * @param lang Offending language string (may be empty).
  * @param opts Resolved options.
- * @returns Replacement language, or `null` to skip the token.
+ * @returns Replacement language, or `null` to skip.
  * @throws {StreamdPluginShikiArgumentError} On `"error"` mode.
  */
 function handleUnknown(lang: string, opts: ResolvedOptions): string | null {

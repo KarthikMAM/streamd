@@ -16,11 +16,7 @@
 import { resolveDelimiters } from "../../resolver/delimiters";
 import type { InlineNode, LinkReference } from "../../types/internal";
 import type { InlineToken } from "../../types/tokens";
-import {
-  createHardbreakToken,
-  createSoftbreakToken,
-  createTextToken,
-} from "../../utils/token-factory";
+import { createHardbreakToken, createTextToken } from "../../utils/token-factory";
 import { CC_SPACE } from "../constants";
 import { scanAutolink, scanGfmAutolink } from "./autolink";
 import { scanCodeSpan } from "./code";
@@ -40,7 +36,6 @@ import {
 import { scanDelimiterRun } from "./emphasis";
 import { scanEntity } from "./entity";
 import { scanEscape } from "./escape";
-import { scanHtmlInline } from "./html";
 import { scanLinkOrImage } from "./link";
 import { scanMathInline } from "./math";
 
@@ -220,15 +215,6 @@ export function parseInlines(
           pos = autolinkResult.end;
           textStart = pos;
           handled = true;
-        } else {
-          const htmlResult = scanHtmlInline(src, pos, end);
-          if (htmlResult) {
-            pushToken(nodeCount, htmlResult.token, pos, htmlResult.end);
-            nodeCount++;
-            pos = htmlResult.end;
-            textStart = pos;
-            handled = true;
-          }
         }
         break;
       }
@@ -259,16 +245,21 @@ export function parseInlines(
           pos >= start + 2 &&
           src.charCodeAt(pos - 1) === CC_SPACE &&
           src.charCodeAt(pos - 2) === CC_SPACE;
-        pushToken(
-          nodeCount,
-          isHard ? createHardbreakToken() : createSoftbreakToken(),
-          pos,
-          pos + 1,
-        );
-        nodeCount++;
-        pos++;
-        textStart = pos;
-        handled = true;
+        if (isHard) {
+          pushToken(nodeCount, createHardbreakToken(), pos, pos + 1);
+          nodeCount++;
+          pos++;
+          textStart = pos;
+          handled = true;
+        } else {
+          // Softbreak collapsed into text — newline is literal \n in
+          // TextToken. Set textStart = pos before pos++ so the \n
+          // becomes the start of the next text run; without this, the
+          // final flush would re-emit the already-flushed prefix.
+          textStart = pos;
+          pos++;
+          handled = true;
+        }
         break;
       }
       case H_GFM_AUTOLINK: {

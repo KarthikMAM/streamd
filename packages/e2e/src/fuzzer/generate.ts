@@ -115,7 +115,7 @@ type BlockKind =
   | "nestedList"
   | "fencedCode"
   | "indentedCode"
-  | "htmlBlock"
+  | "tagParagraph"
   | "hr"
   | "table"
   | "mathBlock";
@@ -133,7 +133,7 @@ const FULL_ROSTER: ReadonlyArray<BlockKind> = [
   "nestedList",
   "fencedCode",
   "indentedCode",
-  "htmlBlock",
+  "tagParagraph",
   "hr",
   "table",
   "mathBlock",
@@ -214,7 +214,7 @@ function coveragePreamble(rng: Rng): string {
     genNestedList(rng),
     genFencedCode(rng),
     genIndentedCode(rng),
-    genHtmlBlock(rng),
+    genTagParagraph(rng),
     genHr(),
     genTable(rng),
     genMathBlock(rng),
@@ -252,7 +252,7 @@ const BLOCK_GENERATORS: Record<BlockKind, (rng: Rng, complexity: Complexity) => 
   nestedList: (rng) => genNestedList(rng),
   fencedCode: (rng) => genFencedCode(rng),
   indentedCode: (rng) => genIndentedCode(rng),
-  htmlBlock: (rng) => genHtmlBlock(rng),
+  tagParagraph: (rng) => genTagParagraph(rng),
   hr: () => genHr(),
   table: (rng) => genTable(rng),
   mathBlock: (rng) => genMathBlock(rng),
@@ -319,7 +319,7 @@ function genKitchenSinkParagraph(rng: Rng): string {
   const image = `![alt](${rng.pick(SAFE_URLS)})`;
   const parts = [
     `**strong** and *em* and ~~strike~~ and \`code\` and ${link} and ${image}`,
-    `with entity &amp; and ${escapedPunct} and <span>inline-html</span> and $x+1$`,
+    `with entity &amp; and ${escapedPunct} and $x+1$`,
     `${hardbreak}after-hardbreak and soft\nbreak line`,
   ];
   return `${parts.join("\n")}\n`;
@@ -431,12 +431,15 @@ function genIndentedCode(rng: Rng): string {
 }
 
 /**
- * Well-formed HTML block (type 6) — open/close tag pair with plain inner text.
+ * Paragraph containing angle-bracket text — replaces the former HTML
+ * block generator. Preserves the same RNG consumption pattern (one
+ * `rng.pick` call) so seed distribution is unchanged from pre-schema-2.
+ * The parser now treats `<tag>` sequences as literal text.
  *
  * @param rng - Seeded RNG for tag name selection.
- * @returns Markdown HTML block with trailing newline.
+ * @returns Markdown paragraph with angle-bracket content and trailing newline.
  */
-function genHtmlBlock(rng: Rng): string {
+function genTagParagraph(rng: Rng): string {
   const tag = rng.pick(["div", "section", "article"]);
   return `<${tag}>\n  hello\n</${tag}>\n`;
 }

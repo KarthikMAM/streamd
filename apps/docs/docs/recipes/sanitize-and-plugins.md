@@ -7,8 +7,7 @@ sidebar_position: 2
 
 How to compose `@streamd/plugins` safely — correct `sanitize()`
 ordering, when to enable `allowDangerousMetaHtml`, and how to combine
-the two with pre-rendering plugins such as `@streamd/plugin-shiki`
-and `@streamd/plugin-katex`.
+the two with pre-rendering plugins such as `@streamd/plugin-shiki`.
 
 ## The rules
 
@@ -103,10 +102,10 @@ clipboard paste — always include `sanitize()`.
 | Source trust | Pre-rendering plugins | `allowDangerousMetaHtml` | `sanitize()` | Outcome |
 |---|---|---|---|---|
 | Trusted | None | off | off | Default rendering. Safe only for trusted input. |
-| Trusted | Shiki / KaTeX | on | off | Pre-rendered output passes through. |
+| Trusted | Shiki | on | off | Pre-rendered output passes through. |
 | Untrusted | None | off | on | Safe defaults. Raw HTML from source dropped. |
-| Untrusted | Shiki / KaTeX | on | `sanitize({ allowRawHtml: true })` | Trusted pre-rendering + scheme allowlist on source URLs. |
-| Untrusted | Shiki / KaTeX | off | on (default) | Defence in depth. Code / math render via defaults. |
+| Untrusted | Shiki | on | `sanitize({ allowRawHtml: true })` | Trusted pre-rendering + scheme allowlist on source URLs. |
+| Untrusted | Shiki | off | on (default) | Defence in depth. Code renders via defaults. |
 
 ## Why `meta.html` is gated
 
@@ -159,4 +158,4 @@ plugin name on `pluginName`. Catch once at the pipeline boundary.
   and the full Plugin ABI.
 - [Shiki integration](./shiki-integration) — step-by-step Shiki
   recipe, including the async factory lifecycle.
-- [KaTeX integration](./math-rendering) — same for math.
+- [Math rendering](./math-rendering) — component-override approach for KaTeX.

@@ -22,7 +22,6 @@ describe("parseCliArgs — defaults", () => {
       anchors: false,
       linkAttrs: false,
       sanitize: true,
-      allowDangerousMetaHtml: false,
       stream: "auto",
       wrapRoot: false,
       xhtml: true,
@@ -108,13 +107,9 @@ describe("parseCliArgs — sanitize", () => {
   });
 });
 
-describe("parseCliArgs — allow-dangerous-meta-html", () => {
-  it("defaults to false", () => {
-    expect(parseCliArgs([]).allowDangerousMetaHtml).toBe(false);
-  });
-
-  it("--allow-dangerous-meta-html sets it to true", () => {
-    expect(parseCliArgs(["--allow-dangerous-meta-html"]).allowDangerousMetaHtml).toBe(true);
+describe("parseCliArgs — allow-dangerous-meta-html (removed)", () => {
+  it("throws unknown-flag when --allow-dangerous-meta-html is passed", () => {
+    expectArgError(["--allow-dangerous-meta-html"], "unknown-flag");
   });
 });
 
@@ -220,19 +215,12 @@ describe("parseCliArgs — combined realistic scenarios", () => {
       anchors: true,
       linkAttrs: true,
       sanitize: true,
-      allowDangerousMetaHtml: false,
       stream: "auto",
       wrapRoot: true,
       xhtml: true,
       help: false,
       version: false,
     });
-  });
-
-  it("trusted-highlighter combo (no sanitize, allow meta html)", () => {
-    const opts = parseCliArgs(["--no-sanitize", "--allow-dangerous-meta-html"]);
-    expect(opts.sanitize).toBe(false);
-    expect(opts.allowDangerousMetaHtml).toBe(true);
   });
 });
 

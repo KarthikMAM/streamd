@@ -33,15 +33,6 @@ export const pluginsErrorMessage = {
     `applyPlugins: plugin "${pluginName}" does not declare a "requires" field. Every plugin must declare { requires: { tokenSchema: TOKEN_SCHEMA_VERSION } } from "@streamd/parser". See @streamd/plugins README "Plugin ABI".`,
 
   /**
-   * Built when the plugin pipeline contains `sanitize` but not as the
-   * final entry. Any plugin after `sanitize` could reintroduce the raw
-   * HTML, unsafe links, or dangerous meta attributes that `sanitize`
-   * just stripped.
-   */
-  sanitizeNotLast: (index: number, total: number) =>
-    `applyPlugins: "sanitize" must be the last plugin in the pipeline but was at index ${index} of ${total}. Any plugin after sanitize() can reintroduce unsafe output — reorder so sanitize() runs last.`,
-
-  /**
    * Built when a plugin's `transform` throws. The original error is
    * attached as the `cause` property on the wrapping
    * `StreamdPluginAbiError`.

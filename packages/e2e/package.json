@@ -1,6 +1,6 @@
 {
   "name": "@streamd/e2e",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "End-to-end integration tests across @streamd packages",
   "type": "module",

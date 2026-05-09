@@ -6,14 +6,13 @@
 import { describe, expect, it } from "vitest";
 import { BlockKind, createBlock } from "./types";
 
-describe("FlatKind", () => {
-  it("should have dense integer values starting at 0", () => {
+describe("BlockKind", () => {
+  it("has dense integer values for all block kinds", () => {
     expect(BlockKind.Paragraph).toBe(0);
     expect(BlockKind.AtxHeading).toBe(1);
     expect(BlockKind.SetextHeading).toBe(2);
     expect(BlockKind.FencedCode).toBe(3);
     expect(BlockKind.IndentedCode).toBe(4);
-    expect(BlockKind.HtmlBlock).toBe(5);
     expect(BlockKind.ThematicBreak).toBe(6);
     expect(BlockKind.Blockquote).toBe(7);
     expect(BlockKind.List).toBe(8);
@@ -23,8 +22,8 @@ describe("FlatKind", () => {
   });
 });
 
-describe("createFlatBlock", () => {
-  it("should initialize all fields in fixed order", () => {
+describe("createBlock", () => {
+  it("initializes all fields in fixed order with zero-values", () => {
     const block = createBlock(BlockKind.Paragraph, 42);
     expect(block.kind).toBe(BlockKind.Paragraph);
     expect(block.start).toBe(42);
@@ -37,14 +36,13 @@ describe("createFlatBlock", () => {
     expect(block.fenceIndent).toBe(0);
     expect(block.lang).toBe("");
     expect(block.info).toBe("");
-    expect(block.htmlBlockType).toBe(0);
     expect(block.align).toEqual([]);
     expect(block.ordered).toBe(false);
     expect(block.listStart).toBe(0);
     expect(block.taskListItems).toBe(false);
   });
 
-  it("should produce monomorphic shapes across different kinds", () => {
+  it("produces monomorphic shapes across different kinds", () => {
     const a = createBlock(BlockKind.Paragraph, 0);
     const b = createBlock(BlockKind.FencedCode, 10);
     expect(Object.keys(a)).toEqual(Object.keys(b));

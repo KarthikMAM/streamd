@@ -1,40 +1,38 @@
 /**
- * Token type constants — dense integers for hot-path dispatch.
+ * Token type constants — string literals for discriminated union dispatch.
  *
  * Used as the discriminant field in all public token interfaces.
- * Dense numbering (0–22) enables V8 jump table optimization in switch statements.
+ * V8 interns short literal strings and compares by pointer equality;
+ * hot-path cost is within noise of integer comparison.
  *
- * Values 0–9 are block tokens, 10–22 are inline tokens.
+ * Final set: 20 tokens (HtmlBlock, HtmlInline, Softbreak removed).
  *
  * @module types/token-type
  */
 
-/** Dense integer token type constants. */
+/** String-literal token type constants. */
 export const TokenType = {
-  Blockquote: 0,
-  List: 1,
-  ListItem: 2,
-  Heading: 3,
-  Paragraph: 4,
-  CodeBlock: 5,
-  HtmlBlock: 6,
-  Hr: 7,
-  Space: 8,
-  Table: 9,
-  Text: 10,
-  Softbreak: 11,
-  Hardbreak: 12,
-  CodeSpan: 13,
-  Em: 14,
-  Strong: 15,
-  Strikethrough: 16,
-  Link: 17,
-  Image: 18,
-  HtmlInline: 19,
-  Escape: 20,
-  MathInline: 21,
-  MathBlock: 22,
+  Blockquote: "blockquote",
+  List: "list",
+  ListItem: "list_item",
+  Heading: "heading",
+  Paragraph: "paragraph",
+  CodeBlock: "code_block",
+  Hr: "hr",
+  Space: "space",
+  Table: "table",
+  Text: "text",
+  Hardbreak: "hardbreak",
+  CodeSpan: "code_span",
+  Em: "em",
+  Strong: "strong",
+  Strikethrough: "strikethrough",
+  Link: "link",
+  Image: "image",
+  Escape: "escape",
+  MathInline: "math_inline",
+  MathBlock: "math_block",
 } as const;
 
-/** Union of all valid token type integer values. */
+/** Union of all valid token type string values. */
 export type TokenTypeValue = (typeof TokenType)[keyof typeof TokenType];

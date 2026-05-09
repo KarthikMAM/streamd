@@ -20,7 +20,6 @@ import {
   CC_GT,
   CC_HASH,
   CC_LF,
-  CC_LT,
   CC_PIPE,
   CC_PLUS,
   CC_SPACE,
@@ -173,7 +172,6 @@ function isBlockStartChar(ch: number, math: boolean): boolean {
   if (ch === CC_HASH) return true;
   if (ch === CC_BACKTICK || ch === CC_TILDE) return true;
   if (ch === CC_GT) return true;
-  if (ch === CC_LT) return true;
   if (ch === CC_PIPE) return true;
   if (ch === CC_DASH || ch === CC_STAR || ch === CC_PLUS || ch === CC_UNDERSCORE) return true;
   if (ch >= CC_0 && ch <= CC_9) return true;

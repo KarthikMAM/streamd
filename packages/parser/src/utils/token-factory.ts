@@ -17,8 +17,6 @@ import type {
   HardbreakToken,
   HeadingToken,
   HrToken,
-  HtmlBlockToken,
-  HtmlInlineToken,
   ImageToken,
   InlineToken,
   LinkToken,
@@ -27,7 +25,6 @@ import type {
   MathBlockToken,
   MathInlineToken,
   ParagraphToken,
-  SoftbreakToken,
   SpaceToken,
   StrikethroughToken,
   StrongToken,
@@ -39,11 +36,6 @@ import type {
 /** Create a text content token. */
 export function createTextToken(content: string): TextToken {
   return { type: TokenType.Text, content };
-}
-
-/** Create a soft line break token (newline not preceded by 2+ spaces). */
-export function createSoftbreakToken(): SoftbreakToken {
-  return { type: TokenType.Softbreak };
 }
 
 /** Create a hard line break token (2+ trailing spaces or backslash before newline). */
@@ -85,11 +77,6 @@ export function createImageToken(src: string, alt: string, title: string): Image
   return { type: TokenType.Image, src, alt, title };
 }
 
-/** Create an inline HTML token with raw HTML content. */
-export function createHtmlInlineToken(content: string): HtmlInlineToken {
-  return { type: TokenType.HtmlInline, content };
-}
-
 /** Create a backslash escape token with the escaped character. */
 export function createEscapeToken(content: string): EscapeToken {
   return { type: TokenType.Escape, content };
@@ -113,14 +100,9 @@ export function createParagraphToken(children: Array<InlineToken>): ParagraphTok
   return { type: TokenType.Paragraph, children };
 }
 
-/** Create a code block token with language, info string, and content. */
-export function createCodeBlockToken(lang: string, info: string, content: string): CodeBlockToken {
-  return { type: TokenType.CodeBlock, lang, info, content };
-}
-
-/** Create an HTML block token with raw HTML content. */
-export function createHtmlBlockToken(content: string): HtmlBlockToken {
-  return { type: TokenType.HtmlBlock, content };
+/** Create a code block token with language and content. */
+export function createCodeBlockToken(lang: string, content: string): CodeBlockToken {
+  return { type: TokenType.CodeBlock, lang, content };
 }
 
 /** Create a thematic break (horizontal rule) token. */

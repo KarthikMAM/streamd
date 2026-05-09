@@ -192,9 +192,9 @@ function runMixedSection(): void {
   ]);
 }
 
-/** Section: many softbreaks inside one paragraph. */
+/** Section: many newlines inside one paragraph (text-append with newlines). */
 function runNewlineParagraphSection(): void {
-  console.log("\n=== Paragraph with Newlines (softbreak tokens) ===\n");
+  console.log("\n=== Paragraph with Newlines (text-append path) ===\n");
   const newlineParagraph = "Line of text here\n".repeat(600);
   printResults([
     profileStreaming("10KB, 50B chunks", newlineParagraph.slice(0, 10240), 50, 20, 50),

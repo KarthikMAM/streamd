@@ -16,6 +16,15 @@ import { htmlErrorMessage } from "./messages";
 const SOURCE = "@streamd/html";
 
 /**
+ * Discriminator identifying the category of argument violation.
+ * Each kind maps to a distinct error scenario at the public API boundary.
+ */
+export type StreamdHtmlArgumentErrorKind =
+  | "tokens-not-array"
+  | "source-not-string"
+  | "unknown-token-type";
+
+/**
  * Error thrown when a `@streamd/html` public-API argument violates its
  * contract. Extends the shared `StreamdArgumentError` so callers can
  * write a single `catch` that covers every package.
@@ -35,7 +44,7 @@ export class StreamdHtmlArgumentError extends StreamdArgumentError {
 /** Fields accepted by the `StreamdHtmlArgumentError` constructor. */
 export interface StreamdHtmlArgumentErrorFields {
   /** Discriminator identifying the category of argument violation. */
-  readonly kind: "tokens-not-array" | "source-not-string" | "unknown-token-type";
+  readonly kind: StreamdHtmlArgumentErrorKind;
   /** Name of the public API function that detected the violation. */
   readonly caller: string;
   /** Human-readable error message describing what went wrong. */

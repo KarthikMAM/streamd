@@ -29,7 +29,12 @@
     "packages/react-native": {
       "entry": ["src/index.ts"],
       "project": ["src/**/*.ts", "src/**/*.tsx"],
-      "ignore": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+      "ignore": [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/streaming/animation.web.tsx",
+        "src/streaming/words.web.tsx"
+      ]
     }
   },
   "ignoreExportsUsedInFile": true,

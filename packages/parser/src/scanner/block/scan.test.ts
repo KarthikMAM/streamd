@@ -63,10 +63,10 @@ describe("scanBlocks", () => {
     expect(blocks[0]!.kind).toBe(BlockKind.IndentedCode);
   });
 
-  it("should scan HTML block", () => {
+  it("treats lines starting with < as paragraph (HTML blocks removed)", () => {
     const blocks = scanBlocks("<div>\ncontent\n</div>", false, false, false);
     expect(blocks.length).toBe(1);
-    expect(blocks[0]!.kind).toBe(BlockKind.HtmlBlock);
+    expect(blocks[0]!.kind).toBe(BlockKind.Paragraph);
   });
 
   it("should scan math block when enabled", () => {

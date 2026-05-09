@@ -12,7 +12,6 @@
       "@streamd/react-native",
       "@streamd/plugins",
       "@streamd/plugin-shiki",
-      "@streamd/plugin-katex",
       "@streamd/cli"
     ]
   ],

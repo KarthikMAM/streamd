@@ -131,17 +131,7 @@ describe("assembleBlock", () => {
     }
   });
 
-  it("should assemble HTML block with trailing newline", () => {
-    const src = "<div>content</div>";
-    const block = makeBlock(BlockKind.HtmlBlock, src, 0, src.length);
-    const token = assembleBlock(src, block, refMap, DEFAULT_OPTS);
-    expect(token?.type).toBe(TokenType.HtmlBlock);
-    if (token?.type === TokenType.HtmlBlock) {
-      expect(token.content.endsWith("\n")).toBe(true);
-    }
-  });
-
-  it("should assemble math block", () => {
+  it("assembles math block", () => {
     const src = "x^2 + y^2";
     const block = makeBlock(BlockKind.MathBlock, src, 0, src.length);
     const token = assembleBlock(src, block, refMap, { ...DEFAULT_OPTS, math: true });

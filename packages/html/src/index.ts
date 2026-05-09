@@ -11,6 +11,12 @@ export { decodeEntities, escapeAttr, escapeHtml, normalizeUrl } from "./escape";
 export { renderHtml } from "./render";
 export type { StreamHtmlOptions, StreamHtmlResult, ThemeStylesheetOptions } from "./streaming";
 export { renderThemeStylesheet, streamHtml } from "./streaming";
-export type { RenderHtml, RenderHtmlOptions } from "./types";
-export type { StreamdHtmlArgumentErrorFields } from "./validation";
+export type {
+  HtmlComponents,
+  HtmlRenderContext,
+  RenderHtml,
+  RenderHtmlOptions,
+  TokenByType,
+} from "./types";
+export type { StreamdHtmlArgumentErrorFields, StreamdHtmlArgumentErrorKind } from "./validation";
 export { StreamdHtmlArgumentError } from "./validation";

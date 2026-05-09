@@ -3,10 +3,8 @@
  *
  * Shiki is mocked via `vi.mock` so the test suite exercises the
  * plugin's token-walking + language-resolution logic without pulling
- * in the real grammar / theme loaders. The mock keeps a running spy
- * for `createHighlighter` and `codeToHtml` so cache-hit and
- * highlight-content assertions can inspect call counts and arguments
- * directly.
+ * in the real grammar / theme loaders. The mock returns structured
+ * token arrays matching Shiki's `codeToTokens` shape.
  *
  * @module shiki.test
  */
@@ -14,6 +12,7 @@
 import {
   type BlockquoteToken,
   type CodeBlockToken,
+  type HighlightData,
   parse,
   TOKEN_SCHEMA_VERSION,
   TokenType,
@@ -22,38 +21,32 @@ import { applyPlugins } from "@streamd/plugins";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
-  const codeToHtml = vi.fn(
-    (code: string, opts: { lang: string }) =>
-      `<pre class="shiki-mock" data-lang="${opts.lang}"><code>${code}</code></pre>`,
-  );
+  const codeToTokens = vi.fn((_code: string, _opts: { lang: string; theme: string }) => ({
+    tokens: [[{ content: _code.trimEnd(), color: "#000000", fontStyle: 0 }]],
+    fg: "#000000",
+    bg: "#ffffff",
+  }));
   const getLoadedLanguages = vi.fn(
     (): Array<string> => ["typescript", "javascript", "plaintext", "bash"],
   );
   const createHighlighter = vi.fn(
     async (_opts: { themes: Array<unknown>; langs: Array<string> }) => ({
-      codeToHtml,
+      codeToTokens,
       getLoadedLanguages,
     }),
   );
-  return { codeToHtml, getLoadedLanguages, createHighlighter };
+  return { codeToTokens, getLoadedLanguages, createHighlighter };
 });
 
 vi.mock("shiki", () => ({
   createHighlighter: mocks.createHighlighter,
 }));
 
-/**
- * Counter used by `uniqueTheme` to hand out fresh theme names per
- * test. Tests that share theme names across runs would collide on
- * the module-level highlighter cache.
- */
+/** Counter for unique theme names per test. */
 let themeCounter = 0;
 
 /**
- * Generate a cache-key-unique theme pair for one test. Using a
- * fresh key in each test keeps the module-level `HIGHLIGHTER_CACHE`
- * from leaking state between cases without needing a private reset
- * hook.
+ * Generate a cache-key-unique theme pair for one test.
  *
  * @param suffix Optional disambiguator appended to the theme names.
  * @returns A fresh `{ light, dark }` pair.
@@ -66,8 +59,18 @@ function uniqueTheme(suffix = ""): { light: string; dark: string } {
   };
 }
 
+/**
+ * Extract highlight data from a code block token.
+ *
+ * @param token Code block token to extract from.
+ * @returns The HighlightData or undefined.
+ */
+function getHighlight(token: CodeBlockToken): HighlightData | undefined {
+  return token.meta?.highlight;
+}
+
 beforeEach(() => {
-  mocks.codeToHtml.mockClear();
+  mocks.codeToTokens.mockClear();
   mocks.getLoadedLanguages.mockClear();
   mocks.createHighlighter.mockClear();
 });
@@ -191,30 +194,129 @@ describe("shiki factory — highlighter wiring", () => {
   });
 });
 
-describe("shiki transform — code block highlighting", () => {
-  it("sets meta.html on known-language code blocks", async () => {
+describe("shiki transform — structured highlight annotation", () => {
+  it("sets meta.highlight on known-language code blocks", async () => {
     const { shiki } = await import("./index");
-    const plugin = await shiki({ themes: uniqueTheme("-known") });
+    const themes = uniqueTheme("-known");
+    const plugin = await shiki({ themes });
     const tokens = parse("```typescript\nlet x = 1;\n```\n").tokens;
     const out = applyPlugins(tokens, [plugin]).tokens;
     const block = out[0] as CodeBlockToken;
-    expect(block.meta?.html).toContain('data-lang="typescript"');
-    expect(block.meta?.html).toContain("let x = 1;");
-    expect(mocks.codeToHtml).toHaveBeenCalledTimes(1);
+    const highlight = getHighlight(block);
+
+    expect(highlight).not.toBeUndefined();
+    // biome-ignore lint/style/noNonNullAssertion: asserted above
+    expect(highlight!.lang).toBe("typescript");
+    // biome-ignore lint/style/noNonNullAssertion: asserted above
+    expect(highlight!.theme).toBe(themes.light);
+    // biome-ignore lint/style/noNonNullAssertion: asserted above
+    expect(highlight!.lines.length).toBeGreaterThanOrEqual(1);
+    expect(mocks.codeToTokens).toHaveBeenCalledTimes(1);
   });
 
-  it("passes both themes to codeToHtml for dual-theme output", async () => {
+  it("produces segments whose combined text equals the source code", async () => {
     const { shiki } = await import("./index");
-    const themes = uniqueTheme("-dual");
+    const plugin = await shiki({ themes: uniqueTheme("-text-eq") });
+    mocks.codeToTokens.mockReturnValueOnce({
+      tokens: [
+        [
+          { content: "let", color: "#0000ff", fontStyle: 0 },
+          { content: " x = 1;", color: "#000000", fontStyle: 0 },
+        ],
+      ],
+      fg: "#000",
+      bg: "#fff",
+    });
+    const tokens = parse("```typescript\nlet x = 1;\n```\n").tokens;
+    const out = applyPlugins(tokens, [plugin]).tokens;
+    const highlight = getHighlight(out[0] as CodeBlockToken);
+
+    expect(highlight).not.toBeUndefined();
+    // biome-ignore lint/style/noNonNullAssertion: asserted above
+    const combined = highlight!.lines[0]!.map((s) => s.text).join("");
+    expect(combined).toBe("let x = 1;");
+  });
+
+  it("maps multi-line code to multiple highlight lines", async () => {
+    const { shiki } = await import("./index");
+    const plugin = await shiki({ themes: uniqueTheme("-multiline") });
+    mocks.codeToTokens.mockReturnValueOnce({
+      tokens: [
+        [{ content: "const a = 1;", color: "#000", fontStyle: 0 }],
+        [{ content: "const b = 2;", color: "#000", fontStyle: 0 }],
+        [{ content: "const c = 3;", color: "#000", fontStyle: 0 }],
+      ],
+      fg: "#000",
+      bg: "#fff",
+    });
+    const tokens = parse("```typescript\nconst a = 1;\nconst b = 2;\nconst c = 3;\n```\n").tokens;
+    const out = applyPlugins(tokens, [plugin]).tokens;
+    const highlight = getHighlight(out[0] as CodeBlockToken);
+
+    expect(highlight).not.toBeUndefined();
+    // biome-ignore lint/style/noNonNullAssertion: asserted above
+    expect(highlight!.lines.length).toBe(3);
+  });
+
+  it("maps fontStyle bitmask to bold, italic, underline fields", async () => {
+    const { shiki } = await import("./index");
+    const plugin = await shiki({ themes: uniqueTheme("-fontstyle") });
+    mocks.codeToTokens.mockReturnValueOnce({
+      tokens: [
+        [
+          { content: "bold", color: "#f00", fontStyle: 2 },
+          { content: "italic", color: "#0f0", fontStyle: 1 },
+          { content: "underline", color: "#00f", fontStyle: 4 },
+          { content: "all", color: "#fff", fontStyle: 7 },
+        ],
+      ],
+      fg: "#000",
+      bg: "#fff",
+    });
+    const tokens = parse("```typescript\nbold italic underline all\n```\n").tokens;
+    const out = applyPlugins(tokens, [plugin]).tokens;
+    const highlight = getHighlight(out[0] as CodeBlockToken);
+
+    expect(highlight).not.toBeUndefined();
+    // biome-ignore lint/style/noNonNullAssertion: asserted above
+    const segments = highlight!.lines[0]!;
+    expect(segments[0]).toEqual({ text: "bold", color: "#f00", bold: true });
+    expect(segments[1]).toEqual({ text: "italic", color: "#0f0", italic: true });
+    expect(segments[2]).toEqual({ text: "underline", color: "#00f", underline: true });
+    expect(segments[3]).toEqual({
+      text: "all",
+      color: "#fff",
+      bold: true,
+      italic: true,
+      underline: true,
+    });
+  });
+
+  it("passes the light theme to codeToTokens", async () => {
+    const { shiki } = await import("./index");
+    const themes = uniqueTheme("-theme-pass");
     const plugin = await shiki({ themes });
     const tokens = parse("```typescript\nx;\n```\n").tokens;
     applyPlugins(tokens, [plugin]);
-    const call = mocks.codeToHtml.mock.calls[0]?.[1] as unknown as {
-      themes: { light: string; dark: string };
+    const call = mocks.codeToTokens.mock.calls[0]?.[1] as unknown as {
+      theme: string;
       lang: string;
     };
-    expect(call.themes).toEqual(themes);
+    expect(call.theme).toBe(themes.light);
     expect(call.lang).toBe("typescript");
+  });
+
+  it("sets highlight.theme to the light theme key", async () => {
+    const { shiki } = await import("./index");
+    const themes = uniqueTheme("-theme-key");
+    const plugin = await shiki({ themes });
+    const tokens = parse("```typescript\nx;\n```\n").tokens;
+    const out = applyPlugins(tokens, [plugin]).tokens;
+    const highlight = getHighlight(out[0] as CodeBlockToken);
+
+    expect(highlight).not.toBeUndefined();
+    // biome-ignore lint/style/noNonNullAssertion: asserted above
+    expect(highlight!.theme).toBe(themes.light);
   });
 
   it("defaults unknown languages to plaintext", async () => {
@@ -222,9 +324,12 @@ describe("shiki transform — code block highlighting", () => {
     const plugin = await shiki({ themes: uniqueTheme("-unknown-default") });
     const tokens = parse("```brainfuck\n+++\n```\n").tokens;
     const out = applyPlugins(tokens, [plugin]).tokens;
-    const block = out[0] as CodeBlockToken;
-    expect(block.meta?.html).toContain('data-lang="plaintext"');
-    expect(mocks.codeToHtml).toHaveBeenCalledWith(
+    const highlight = getHighlight(out[0] as CodeBlockToken);
+
+    expect(highlight).not.toBeUndefined();
+    // biome-ignore lint/style/noNonNullAssertion: asserted above
+    expect(highlight!.lang).toBe("plaintext");
+    expect(mocks.codeToTokens).toHaveBeenCalledWith(
       "+++\n",
       expect.objectContaining({ lang: "plaintext" }),
     );
@@ -238,8 +343,8 @@ describe("shiki transform — code block highlighting", () => {
     });
     const tokens = parse("```brainfuck\n+++\n```\n").tokens;
     const out = applyPlugins(tokens, [plugin]).tokens;
-    expect((out[0] as CodeBlockToken).meta?.html).toBeUndefined();
-    expect(mocks.codeToHtml).not.toHaveBeenCalled();
+    expect(getHighlight(out[0] as CodeBlockToken)).toBeUndefined();
+    expect(mocks.codeToTokens).not.toHaveBeenCalled();
   });
 
   it("throws StreamdPluginShikiArgumentError when onUnknownLang is 'error'", async () => {
@@ -250,10 +355,10 @@ describe("shiki transform — code block highlighting", () => {
     });
     const tokens = parse("```brainfuck\n+++\n```\n").tokens;
     expect(() => applyPlugins(tokens, [plugin])).toThrow();
+
     try {
       applyPlugins(tokens, [plugin]);
     } catch (err) {
-      // applyPlugins rewraps transform errors — the original is on `cause`.
       const cause = (err as { cause?: unknown }).cause;
       expect(cause).toBeInstanceOf(StreamdPluginShikiArgumentError);
       expect((cause as { kind: string }).kind).toBe("unknown-language");
@@ -265,20 +370,25 @@ describe("shiki transform — code block highlighting", () => {
     const plugin = await shiki({ themes: uniqueTheme("-no-lang") });
     const tokens = parse("```\nplain content\n```\n").tokens;
     const out = applyPlugins(tokens, [plugin]).tokens;
-    expect((out[0] as CodeBlockToken).meta?.html).toContain('data-lang="plaintext"');
+    const highlight = getHighlight(out[0] as CodeBlockToken);
+
+    expect(highlight).not.toBeUndefined();
+    // biome-ignore lint/style/noNonNullAssertion: asserted above
+    expect(highlight!.lang).toBe("plaintext");
   });
 
-  it("leaves tokens unchanged when meta.html is already set", async () => {
+  it("leaves tokens unchanged when meta.highlight is already set", async () => {
     const { shiki } = await import("./index");
     const plugin = await shiki({ themes: uniqueTheme("-preset") });
     const tokens = parse("```typescript\nx;\n```\n").tokens;
+    const existing: HighlightData = { lines: [], lang: "ts", theme: "custom" };
     const preset = tokens.map((t) => ({
       ...t,
-      meta: { html: "<pre>already done</pre>" },
+      meta: { highlight: existing },
     }));
     const out = applyPlugins(preset, [plugin]).tokens;
-    expect(out[0]?.meta?.html).toBe("<pre>already done</pre>");
-    expect(mocks.codeToHtml).not.toHaveBeenCalled();
+    expect(getHighlight(out[0] as CodeBlockToken)).toBe(existing);
+    expect(mocks.codeToTokens).not.toHaveBeenCalled();
   });
 
   it("handles nested code blocks inside a blockquote", async () => {
@@ -290,7 +400,11 @@ describe("shiki transform — code block highlighting", () => {
     expect(bq.type).toBe(TokenType.Blockquote);
     const inner = bq.children[0] as CodeBlockToken;
     expect(inner.type).toBe(TokenType.CodeBlock);
-    expect(inner.meta?.html).toContain('data-lang="typescript"');
+    const highlight = getHighlight(inner);
+
+    expect(highlight).not.toBeUndefined();
+    // biome-ignore lint/style/noNonNullAssertion: asserted above
+    expect(highlight!.lang).toBe("typescript");
   });
 
   it("handles multiple code blocks in one pass", async () => {
@@ -298,9 +412,19 @@ describe("shiki transform — code block highlighting", () => {
     const plugin = await shiki({ themes: uniqueTheme("-multi") });
     const tokens = parse("```typescript\na;\n```\n\n```javascript\nb;\n```\n").tokens;
     const out = applyPlugins(tokens, [plugin]).tokens;
-    expect((out[0] as CodeBlockToken).meta?.html).toContain('data-lang="typescript"');
-    expect((out[1] as CodeBlockToken).meta?.html).toContain('data-lang="javascript"');
-    expect(mocks.codeToHtml).toHaveBeenCalledTimes(2);
+    const codeBlocks = out.filter((t) => t.type === TokenType.CodeBlock) as Array<CodeBlockToken>;
+
+    expect(codeBlocks.length).toBe(2);
+    const h1 = getHighlight(codeBlocks[0] as CodeBlockToken);
+    const h2 = getHighlight(codeBlocks[1] as CodeBlockToken);
+
+    expect(h1).not.toBeUndefined();
+    expect(h2).not.toBeUndefined();
+    // biome-ignore lint/style/noNonNullAssertion: asserted above
+    expect(h1!.lang).toBe("typescript");
+    // biome-ignore lint/style/noNonNullAssertion: asserted above
+    expect(h2!.lang).toBe("javascript");
+    expect(mocks.codeToTokens).toHaveBeenCalledTimes(2);
   });
 });
 

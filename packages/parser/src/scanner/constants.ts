@@ -115,8 +115,6 @@ export const CC_MAX_CODEPOINT = 0x10ffff;
  * Used in HTML block open/close detection for specific tag prefixes.
  * @group HTML Tag Letters
  */
-export const CC_C_UPPER = 0x43;
-export const CC_D_UPPER = 0x44;
 export const CC_F_UPPER = 0x46;
 export const CC_H_UPPER = 0x48;
 export const CC_P_UPPER = 0x50;
@@ -182,78 +180,3 @@ function buildCharTable(): Uint8Array {
  * Typed array indexed access is optimized across all JS engines.
  */
 export const CHAR_TABLE: Uint8Array = buildCharTable();
-
-/**
- * Known block-level HTML tag names for type 6 detection (spec §4.6).
- * Singleton Set — created once at module load.
- */
-export const HTML_BLOCK_TAGS: ReadonlySet<string> = new Set([
-  "address",
-  "article",
-  "aside",
-  "base",
-  "basefont",
-  "blockquote",
-  "body",
-  "caption",
-  "center",
-  "col",
-  "colgroup",
-  "dd",
-  "details",
-  "dialog",
-  "dir",
-  "div",
-  "dl",
-  "dt",
-  "fieldset",
-  "figcaption",
-  "figure",
-  "footer",
-  "form",
-  "frame",
-  "frameset",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "head",
-  "header",
-  "hr",
-  "html",
-  "iframe",
-  "legend",
-  "li",
-  "link",
-  "main",
-  "menu",
-  "menuitem",
-  "nav",
-  "noframes",
-  "ol",
-  "optgroup",
-  "option",
-  "p",
-  "param",
-  "search",
-  "section",
-  "summary",
-  "table",
-  "tbody",
-  "td",
-  "tfoot",
-  "th",
-  "thead",
-  "title",
-  "tr",
-  "track",
-  "ul",
-]);
-
-/**
- * Type 1 HTML block tag names — `<pre>`, `<script>`, `<style>`, `<textarea>`.
- * These have specific close conditions (spec §4.6 type 1).
- */
-export const HTML_TYPE1_TAGS: ReadonlySet<string> = new Set(["pre", "script", "style", "textarea"]);

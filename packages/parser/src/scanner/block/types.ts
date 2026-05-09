@@ -16,7 +16,6 @@ export const BlockKind = {
   SetextHeading: 2,
   FencedCode: 3,
   IndentedCode: 4,
-  HtmlBlock: 5,
   ThematicBreak: 6,
   Blockquote: 7,
   List: 8,
@@ -56,8 +55,6 @@ export interface Block {
   lang: string;
   /** Code block info string */
   info: string;
-  /** HTML block type (1-7) or 0 */
-  htmlBlockType: number;
   /** Table alignment array */
   align: Array<Align>;
   /** List: ordered flag */
@@ -85,7 +82,6 @@ export function createBlock(kind: BlockKindValue, start: number): Block {
     fenceIndent: 0,
     lang: "",
     info: "",
-    htmlBlockType: 0,
     align: [],
     ordered: false,
     listStart: 0,

@@ -4,16 +4,12 @@
  * Extends the shared `StreamdArgumentError` so a single cross-package
  * `instanceof` catch covers validation + ABI mismatch failures.
  *
- * The `kind` discriminator distinguishes four failure modes:
+ * The `kind` discriminator distinguishes three failure modes:
  *  - `"token-schema-mismatch"` — plugin declared a different token schema
  *    version than the parser emits.
  *  - `"missing-requires"` — plugin does not declare `requires`. Every plugin
  *    must declare its expected token schema so third-party plugins fail
  *    loud when the monorepo bumps its ABI.
- *  - `"sanitize-not-last"` — the `sanitize` plugin appears in the pipeline
- *    but is not the final entry. Any plugin placed after `sanitize` can
- *    reintroduce the data `sanitize` just scrubbed (raw HTML, unsafe
- *    links, dangerous meta attributes).
  *  - `"transform-failed"` — a plugin's `transform` threw. The original
  *    error is preserved on the `cause` field; the plugin name is on
  *    `pluginName`.
@@ -35,7 +31,6 @@ const SOURCE = "@streamd/plugins";
 export type StreamdPluginAbiErrorKind =
   | "token-schema-mismatch"
   | "missing-requires"
-  | "sanitize-not-last"
   | "transform-failed";
 
 /**
@@ -99,7 +94,7 @@ export class StreamdPluginAbiError extends StreamdArgumentError {
  *
  * All fields other than `kind`, `caller`, and `message` are optional
  * because different failure modes populate different subsets
- * (e.g. `"sanitize-not-last"` has no `expected`/`actual`).
+ * (e.g. `"transform-failed"` has no `expected`/`actual`).
  */
 export interface StreamdPluginAbiErrorFields {
   /** Failure-mode discriminator. */

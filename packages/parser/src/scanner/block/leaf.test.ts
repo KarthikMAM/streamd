@@ -8,7 +8,6 @@ import { CC_BACKTICK, CC_DOLLAR, CC_TILDE } from "../constants";
 import {
   scanAtxHeading,
   scanFencedCode,
-  scanHtmlBlock,
   scanIndentedCode,
   scanMathBlock,
   scanThematicBreak,
@@ -17,37 +16,37 @@ import type { Block } from "./types";
 import { BlockKind } from "./types";
 
 describe("scanAtxHeading", () => {
-  it("should parse # heading", () => {
+  it("parses # heading as level 1", () => {
     const r = scanAtxHeading("# Hello", 0, 0, 7);
     expect(r).not.toBeNull();
     expect(r!.kind).toBe(BlockKind.AtxHeading);
     expect(r!.level).toBe(1);
   });
 
-  it("should parse ### heading with level 3", () => {
+  it("parses ### heading as level 3", () => {
     const r = scanAtxHeading("### Title", 0, 0, 9);
     expect(r).not.toBeNull();
     expect(r!.level).toBe(3);
   });
 
-  it("should strip trailing hashes", () => {
+  it("strips trailing hashes from content", () => {
     const src = "## Hello ##";
     const r = scanAtxHeading(src, 0, 0, src.length);
     expect(r).not.toBeNull();
     expect(src.slice(r!.contentStart, r!.contentEnd)).toBe("Hello");
   });
 
-  it("should return null for ####### (7 hashes)", () => {
+  it("returns null for 7 hashes (exceeds max level)", () => {
     expect(scanAtxHeading("####### x", 0, 0, 9)).toBeNull();
   });
 
-  it("should return null when # not followed by space", () => {
+  it("returns null when # not followed by space", () => {
     expect(scanAtxHeading("#notaheading", 0, 0, 12)).toBeNull();
   });
 });
 
 describe("scanFencedCode", () => {
-  it("should detect backtick fence", () => {
+  it("detects backtick fence with language", () => {
     const src = "```js\ncode\n```";
     const r = scanFencedCode(src, 0, 0, 5, CC_BACKTICK);
     expect(r).not.toBeNull();
@@ -55,22 +54,22 @@ describe("scanFencedCode", () => {
     expect(r!.lang).toBe("js");
   });
 
-  it("should detect tilde fence", () => {
+  it("detects tilde fence", () => {
     const src = "~~~\ncode\n~~~";
     const r = scanFencedCode(src, 0, 0, 3, CC_TILDE);
     expect(r).not.toBeNull();
     expect(r!.fenceChar).toBe(CC_TILDE);
   });
 
-  it("should return null for fewer than 3 fence chars", () => {
+  it("returns null for fewer than 3 fence chars", () => {
     expect(scanFencedCode("``code``", 0, 0, 8, CC_BACKTICK)).toBeNull();
   });
 
-  it("should reject backtick fence with backtick in info", () => {
+  it("rejects backtick fence with backtick in info string", () => {
     expect(scanFencedCode("```a`b", 0, 0, 6, CC_BACKTICK)).toBeNull();
   });
 
-  it("should handle unclosed fence", () => {
+  it("handles unclosed fence extending to EOF", () => {
     const src = "```\ncode\nmore";
     const r = scanFencedCode(src, 0, 0, 3, CC_BACKTICK);
     expect(r).not.toBeNull();
@@ -79,66 +78,44 @@ describe("scanFencedCode", () => {
 });
 
 describe("scanIndentedCode", () => {
-  it("should scan indented lines", () => {
+  it("scans consecutive indented lines as one block", () => {
     const blocks: Array<Block> = [];
     const src = "    code line 1\n    code line 2\nnot code";
     const pos = scanIndentedCode(src, blocks, 0);
     expect(blocks.length).toBe(1);
-    expect(blocks[0].kind).toBe(BlockKind.IndentedCode);
-    // Scanner stops at the first non-indented line; both 16-char indented
-    // lines (incl. trailing \n) are consumed, leaving pos at the "not code"
-    // line start.
+    expect(blocks[0]!.kind).toBe(BlockKind.IndentedCode);
     expect(pos).toBe("    code line 1\n    code line 2\n".length);
   });
 });
 
 describe("scanThematicBreak", () => {
-  it("should match ---", () => {
+  it("matches --- as thematic break", () => {
     expect(scanThematicBreak("---", 0, 3, 0x2d)).toBe(true);
   });
 
-  it("should match ***", () => {
+  it("matches *** as thematic break", () => {
     expect(scanThematicBreak("***", 0, 3, 0x2a)).toBe(true);
   });
 
-  it("should match ___", () => {
+  it("matches ___ as thematic break", () => {
     expect(scanThematicBreak("___", 0, 3, 0x5f)).toBe(true);
   });
 
-  it("should match with spaces between", () => {
+  it("matches with spaces between chars", () => {
     expect(scanThematicBreak("- - -", 0, 5, 0x2d)).toBe(true);
   });
 
-  it("should reject fewer than 3 chars", () => {
+  it("rejects fewer than 3 chars", () => {
     expect(scanThematicBreak("--", 0, 2, 0x2d)).toBe(false);
   });
 
-  it("should reject mixed characters", () => {
+  it("rejects mixed characters", () => {
     expect(scanThematicBreak("-*-", 0, 3, 0x2d)).toBe(false);
   });
 });
 
-describe("scanHtmlBlock", () => {
-  it("should detect type 1 for <pre>", () => {
-    const r = scanHtmlBlock("<pre>content</pre>", 0, 0, 18, false);
-    expect(r).not.toBeNull();
-    expect(r!.kind).toBe(BlockKind.HtmlBlock);
-    expect(r!.htmlBlockType).toBe(1);
-  });
-
-  it("should detect type 6 for <div>", () => {
-    const r = scanHtmlBlock("<div>\ncontent\n</div>", 0, 0, 5, false);
-    expect(r).not.toBeNull();
-    expect(r!.htmlBlockType).toBe(6);
-  });
-
-  it("should return null for non-HTML", () => {
-    expect(scanHtmlBlock("hello", 0, 0, 5, false)).toBeNull();
-  });
-});
-
 describe("scanMathBlock", () => {
-  it("should detect $$ opening", () => {
+  it("detects $$ opening for math block", () => {
     const src = "$$\nx^2\n$$";
     const r = scanMathBlock(src, 0, 0, 2);
     expect(r).not.toBeNull();
@@ -146,7 +123,7 @@ describe("scanMathBlock", () => {
     expect(r!.fenceChar).toBe(CC_DOLLAR);
   });
 
-  it("should return null for single $", () => {
+  it("returns null for single $ (not a math block)", () => {
     expect(scanMathBlock("$ x", 0, 0, 3)).toBeNull();
   });
 });

@@ -139,7 +139,6 @@ function inlineTokenText(token: InlineToken): string {
     case TokenType.Escape:
     case TokenType.MathInline:
       return token.content;
-    case TokenType.Softbreak:
     case TokenType.Hardbreak:
       return " ";
     case TokenType.Em:
