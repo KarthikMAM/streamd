@@ -1,5 +1,24 @@
 # @streamd/plugin-shiki
 
+## 0.2.0
+
+### Minor Changes
+
+- d259513: `shiki()` returns a plugin that annotates `CodeBlock.meta.highlight`
+  with structured `HighlightData` (per-line `ThemedSegment[][]`) via
+  `codeToTokens`. Renderer components read this and emit styled spans
+  / `<Text>` trees directly.
+
+### Patch Changes
+
+- Updated dependencies [d259513]
+- Updated dependencies [d259513]
+- Updated dependencies [d259513]
+- Updated dependencies [d259513]
+  - @streamd/parser@0.2.0
+  - @streamd/plugins@0.2.0
+  - @streamd/tokens@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes
