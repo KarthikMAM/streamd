@@ -12,7 +12,7 @@ IFS=$'\n\t'
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-PACKAGES=(parser tokens html plugins react react-native plugin-shiki plugin-katex cli)
+PACKAGES=(parser tokens html plugins react react-native plugin-shiki cli)
 # Pure-ESM packages ignore the cjs-resolves-to-esm rule (they have no CJS entry by design).
 ESM_ONLY=(cli)
 FAILURES=0

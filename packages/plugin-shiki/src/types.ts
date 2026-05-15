@@ -10,9 +10,9 @@
  * Shiki when `langs` is omitted).
  *
  * - `"plaintext"` (default) — highlight with Shiki's `plaintext` grammar
- *   so the block still gets themed HTML output.
+ *   so the block still gets structured highlight data.
  * - `"ignore"` — leave the token unchanged. The renderer falls back to
- *   its built-in `<pre><code>` emission.
+ *   its default code-block rendering.
  * - `"error"` — throw `StreamdPluginShikiArgumentError` with
  *   `kind: "unknown-language"`. Useful for CI that wants to surface
  *   fenced blocks with typo'd languages.
@@ -33,8 +33,9 @@ export interface ShikiPluginOptions {
    * `"github-dark"`, `"material-theme-palenight"`). Custom themes can
    * be loaded via {@link ShikiPluginOptions.loadTheme}.
    *
-   * The plugin passes both themes to `codeToHtml` so consumers can
-   * style light/dark via CSS custom properties on the root element.
+   * The plugin uses the `light` theme for token colouring. The `dark`
+   * theme is registered with the highlighter for consumers that need
+   * both sets via a separate call.
    */
   readonly themes: {
     readonly light: string;

@@ -10,11 +10,10 @@
  *
  * ## Space tokens
  *
- * `TokenType.Space` (value 8) is defined in the parser's type system
+ * `TokenType.Space` (`"space"`) is defined in the parser's type system
  * but never emitted by the scanner — blank lines are filtered out in
  * `scanner/block/scan.ts`. The assertion below excludes `Space` for
- * that reason; see `packages/parser/src/scanner/block/scan.ts` for the
- * comment on blank-line filtering.
+ * that reason.
  *
  * @module fuzzer/coverage.test
  */
@@ -34,6 +33,7 @@ import {
   type Token,
   type TokensList,
   TokenType,
+  type TokenTypeValue,
 } from "@streamd/parser";
 import { describe, expect, it } from "vitest";
 import { generate } from "./generate";
@@ -48,46 +48,37 @@ const COMPLEXITIES = ["simple", "mixed", "pathological"] as const;
  * `TokenType` values the coverage assertion ignores. `Space` is the
  * only reachable-in-type-system-but-unreachable-in-output kind.
  */
-const EXCLUDED_TYPES: ReadonlySet<number> = new Set([TokenType.Space]);
+const EXCLUDED_TYPES: ReadonlySet<TokenTypeValue> = new Set([TokenType.Space]);
 
 describe("fuzzer: corpus covers every reachable TokenType", () => {
   it("every TokenType value (except Space) appears across sample corpus", () => {
     const seen = collectReachableTypes();
     const missing = listMissingTypes(seen);
-    expect(missing, `missing TokenTypes: ${missing.map(nameOf).join(", ")}`).toEqual([]);
+    expect(missing, `missing TokenTypes: ${missing.join(", ")}`).toEqual([]);
   });
 });
 
 /** Walk the entire sample corpus and collect every `token.type` seen. */
-function collectReachableTypes(): Set<number> {
-  const seen = new Set<number>();
+function collectReachableTypes(): Set<TokenTypeValue> {
+  const seen = new Set<TokenTypeValue>();
   for (const complexity of COMPLEXITIES) {
     for (let seed = 1; seed <= SAMPLE_SIZE; seed++) {
       const src = generate(seed, complexity);
       const { tokens } = parse(src, null, { gfm: true, math: true });
-      walkAllTokens(tokens, (t) => seen.add(t.type));
+      walkAllTokens(tokens, (t) => seen.add(t.type as TokenTypeValue));
     }
   }
   return seen;
 }
 
 /** Compute the set of expected `TokenType` values not yet observed. */
-function listMissingTypes(seen: ReadonlySet<number>): Array<number> {
-  const missing: Array<number> = [];
+function listMissingTypes(seen: ReadonlySet<TokenTypeValue>): Array<TokenTypeValue> {
+  const missing: Array<TokenTypeValue> = [];
   for (const v of Object.values(TokenType)) {
-    if (typeof v !== "number") continue;
     if (EXCLUDED_TYPES.has(v)) continue;
     if (!seen.has(v)) missing.push(v);
   }
   return missing;
-}
-
-/** Reverse-lookup from `TokenType` integer to its string name. */
-function nameOf(value: number): string {
-  for (const [name, v] of Object.entries(TokenType)) {
-    if (v === value) return `${name}(${value})`;
-  }
-  return `Unknown(${value})`;
 }
 
 /**

@@ -1,173 +1,141 @@
 # @streamd/react
 
-React renderer for the [`@streamd/parser`](../parser) token tree.
-Ships with a `<StreamdMarkdown>` component, a `useStreamingMarkdown`
-hook, and full component overrides for every token kind.
+React renderer for `@streamd/parser` token trees. Renders markdown as accessible, themeable React components with streaming support.
 
 ## Install
 
 ```bash
-npm install @streamd/react @streamd/parser @streamd/tokens react react-dom
+npm install @streamd/react @streamd/parser
 ```
 
-`react` and `react-dom` are peer dependencies (React 18 or 19).
-
-## Render markdown
+## Quick Start
 
 ```tsx
-import { StreamdMarkdown, ThemeProvider } from "@streamd/react";
-import { darkTheme } from "@streamd/tokens";
+import { StreamdMarkdown } from "@streamd/react";
 
-export function Post({ markdown }: { markdown: string }) {
+function App() {
+  return <StreamdMarkdown source="# Hello **world**" />;
+}
+```
+
+## Component Overrides
+
+Override any token type's default rendering by passing a `components` map keyed by token type string:
+
+```tsx
+import type { CodeBlockToken } from "@streamd/parser";
+import { StreamdMarkdown } from "@streamd/react";
+
+function MyCodeBlock({ token }: { token: CodeBlockToken }) {
   return (
-    <ThemeProvider theme={darkTheme}>
-      <StreamdMarkdown source={markdown} parseOptions={{ gfm: true }} />
-    </ThemeProvider>
+    <pre className="my-code">
+      <code>{token.content}</code>
+    </pre>
+  );
+}
+
+function App() {
+  return (
+    <StreamdMarkdown
+      source="```js\nconsole.log('hi')\n```"
+      components={{ code_block: MyCodeBlock }}
+    />
   );
 }
 ```
 
-`<ThemeProvider>` is optional — it injects CSS variables so the
-default components pick up the active theme. Skip it if you are
-supplying your own styles.
+### KaTeX via Override
 
-## Streaming hook
+The default math components render raw TeX in `<code>`. Override to use KaTeX:
 
 ```tsx
-import { StreamdMarkdown, useStreamingMarkdown } from "@streamd/react";
+import type { MathBlockToken } from "@streamd/parser";
+import katex from "katex";
 
-export function LiveResponse() {
-  const { tokens, append } = useStreamingMarkdown("", { gfm: true });
-
-  useEffect(() => {
-    const socket = openLLMSocket();
-    socket.onMessage((chunk) => append(chunk));
-    return () => socket.close();
-  }, [append]);
-
-  return <StreamdMarkdown tokens={tokens} />;
+function KaTeXBlock({ token }: { token: MathBlockToken }) {
+  const html = katex.renderToString(token.content, { displayMode: true });
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
 }
-```
-
-## Component overrides
-
-Every token kind has a matching component you can replace:
-
-```tsx
-import { StreamdMarkdown, type LinkProps, type HeadingProps } from "@streamd/react";
-
-const components = {
-  heading: ({ level, id, children }: HeadingProps) =>
-    React.createElement(`h${level}`, { id, className: "my-heading" }, children),
-  link: ({ href, children, rel, target }: LinkProps) => (
-    <a href={href} rel={rel} target={target} className="my-link">
-      {children}
-    </a>
-  ),
-};
-
-<StreamdMarkdown source={md} components={components} />;
-```
-
-See [`src/types.ts`](src/types.ts) for the full `Components` shape.
-`createDefaultComponents()` is also exported if you want to spread the
-defaults into a partial override.
-
-## Plugins + `allowDangerousMetaHtml`
-
-```tsx
-import { StreamdMarkdown } from "@streamd/react";
-import { headingAnchors, linkAttributes, sanitize } from "@streamd/plugins";
 
 <StreamdMarkdown
-  source={userMarkdown}
-  parseOptions={{ gfm: true }}
-  plugins={[headingAnchors(), linkAttributes(), sanitize()]}
-/>;
-```
-
-Plugins that attach pre-rendered HTML to `token.meta.html` (for
-example [`@streamd/plugin-shiki`](../plugin-shiki) or
-[`@streamd/plugin-katex`](../plugin-katex)) require an explicit opt-in
-before the default components will consume the HTML:
-
-```tsx
-<StreamdMarkdown
-  source={markdown}
-  plugins={[shikiPlugin, sanitize({ allowRawHtml: true })]}
-  allowDangerousMetaHtml
+  source="$$E = mc^2$$"
+  components={{ math_block: KaTeXBlock }}
 />
 ```
 
-`allowDangerousMetaHtml` is forwarded to `CodeBlockProps` so custom
-`codeBlock` overrides can honour it via `dangerouslySetInnerHTML`.
-Leave the flag off (default: `false`) whenever you cannot vouch for
-every plugin in the pipeline — see the [security model in the root
-README](../../README.md#security-model).
+## Streaming Reveal
 
-## Direct render function
-
-When you want to bypass the component wrapper — for example, to render
-into a pre-existing React tree during server-side rendering — the
-package exports `renderReact(tokens, options?)` which returns a
-`ReactNode`:
+The `@streamd/react/streaming` subpath provides animated text reveal for LLM streaming:
 
 ```tsx
-import { parse } from "@streamd/parser";
-import { renderReact } from "@streamd/react";
+import { useStreamingMarkdown, StreamdMarkdown } from "@streamd/react";
+import {
+  StreamingRevealProvider,
+  useShouldStream,
+} from "@streamd/react/streaming";
 
-const { tokens } = parse("# hello");
-const node = renderReact(tokens);
+function StreamingChat() {
+  const { tokens, append } = useStreamingMarkdown();
+  const isStreaming = useShouldStream(tokens);
+
+  // Call append(chunk) as LLM tokens arrive...
+
+  return (
+    <StreamingRevealProvider
+      value={{
+        isStreaming,
+        granularity: "word",
+        textMode: "source",
+        animation: "fade-up",
+      }}
+    >
+      <StreamdMarkdown tokens={tokens} />
+    </StreamingRevealProvider>
+  );
+}
 ```
 
-## Accessibility
+### Animation Presets
 
-The default components emit ARIA attributes on tokens that benefit
-from them:
+16 built-in presets: `fade`, `fade-up`, `fade-down`, `slide-in-left`, `slide-in-right`, `slide-up`, `slide-down`, `scale-up`, `scale-down`, `blur`, `blur-fade`, `blur-up`, `typewriter`, `shimmer`, `ripple`, `none`.
 
-- Task-list checkboxes render with `aria-checked` and
-  `aria-disabled` set explicitly (not just via the `checked`
-  attribute) so screen readers announce the state consistently.
-- Fenced code blocks with a declared language render the `<pre>` with
-  `role="region"` + `aria-label="<lang> code block"` so the block is
-  announced as a landmark.
+### Granularity
 
-## Validation
+Control reveal unit size: `"char"`, `"word"`, `"line"`, `"sentence"`, `"chunk"`.
 
-`renderReact` and `<StreamdMarkdown>` throw
-`StreamdReactArgumentError` (a `TypeError` subclass extending the
-shared `StreamdArgumentError` from `@streamd/tokens`) for wrong-typed
-inputs — unknown token types, a non-array `tokens` prop, or a
-non-string `source`.
+## Hooks
 
-## Pairing
+### `useStreamingMarkdown(initialSource?, parseOptions?)`
 
-- Parser: [`@streamd/parser`](../parser)
-- Plugins: [`@streamd/plugins`](../plugins)
-- Monorepo overview: [`streamd README`](../../README.md)
+Incremental streaming parser hook. Call `append(chunk)` as LLM tokens arrive:
 
-## Known differences vs `@streamd/html`
+```tsx
+const { tokens, stableCount, append, reset } = useStreamingMarkdown("", { gfm: true });
+```
 
-`@streamd/react` produces the same logical DOM as `@streamd/html`, but the
-rendered markup differs for raw-HTML tokens because React requires a host
-element for `dangerouslySetInnerHTML`:
+### `useShouldStream(tokens)`
 
-- `HtmlInline` tokens render inside a `<span class="streamd-html-inline">`
-  host element in the React renderer. The HTML renderer emits the raw
-  inline HTML content directly with no wrapper.
-- `HtmlBlock` tokens render inside a `<div class="streamd-html-block">`
-  host element in the React renderer. The HTML renderer emits the raw
-  block HTML content directly with no wrapper.
+Auto-detects streaming activity from token count changes. Returns `true` while tokens are actively arriving, `false` after idle.
 
-This is a deliberate design choice: it matches the approach taken by
-`react-markdown`, `@mdx-js/react`, and other React markdown libraries.
-The alternative — using a React Fragment and custom server-side
-serialization — would complicate the SSR code path significantly for
-no visible benefit in practice. The streaming-equivalence fuzzer's
-parity checker unwraps these wrappers before comparing against the HTML
-renderer's output (see
-`packages/e2e/src/fuzzer/invariants.ts#normalizeHtml`).
+## MemoBlock
+
+The renderer wraps each top-level block in a `<MemoBlock>` that memoises by token reference identity. Since the parser preserves object references for completed blocks across streaming calls, stable blocks skip re-rendering entirely.
+
+## Theme Support
+
+```tsx
+import { ThemeProvider } from "@streamd/react";
+import { darkTheme } from "@streamd/tokens";
+
+<ThemeProvider theme={darkTheme}>
+  <StreamdMarkdown source="..." />
+</ThemeProvider>
+```
+
+## API Reference
+
+See the [TypeDoc documentation](https://github.com/KarthikMAM/streamd) for full API details.
 
 ## License
 
-MIT.
+MIT

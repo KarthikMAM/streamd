@@ -9,8 +9,7 @@ import type {
   CodeBlockToken,
   CodeSpanToken,
   HeadingToken,
-  HtmlBlockToken,
-  HtmlInlineToken,
+  HighlightData,
   ImageToken,
   InlineToken,
   LinkToken,
@@ -23,6 +22,7 @@ import type {
   StrongToken,
   TableToken,
   TextToken,
+  ThemedSegment,
   Token,
   TokensList,
 } from "@streamd/parser";
@@ -63,32 +63,14 @@ export interface ListItemProps extends BaseProps {
   readonly checked: boolean | null;
 }
 
-/** Props for a fenced code block. `lang` is the first info-string token, `info` is the raw string. */
+/** Props for a fenced code block. */
 export interface CodeBlockProps {
-  /** Language identifier extracted from the first word of the info string. Empty when absent. */
+  /** Language identifier extracted from the info string. Empty when absent. */
   readonly lang: string;
-  /** Full info string after the opening fence (includes lang + any trailing metadata). */
-  readonly info: string;
   /** Raw text content of the code block, without the fences. */
   readonly content: string;
-  /**
-   * Pre-rendered HTML from a highlight plugin. Present only when a
-   * plugin populates `meta.html` on the code-block token.
-   *
-   * React Native has no equivalent of `dangerouslySetInnerHTML`, so
-   * the default component never paints this value; it is surfaced on
-   * the type for API parity with `@streamd/react` and so custom
-   * `codeBlock` overrides (for example, a WebView-backed implementation)
-   * can consume it.
-   */
-  readonly html?: string;
-  /**
-   * Opt-in flag that mirrors `@streamd/react`'s
-   * `allowDangerousMetaHtml`. Default RN components ignore it — RN has
-   * no way to render raw HTML safely — but custom overrides should
-   * respect the flag before consuming `props.html`.
-   */
-  readonly allowDangerousMetaHtml?: boolean;
+  /** Structured highlight data from plugin-shiki, if present. */
+  readonly highlight?: HighlightData;
 }
 
 /** Props for inline code span. */
@@ -123,12 +105,6 @@ export interface MathProps {
   readonly content: string;
 }
 
-/** Props for a raw HTML block or inline. Renderers typically drop this. */
-export interface HtmlProps {
-  /** Raw HTML string. RN default components render this as plain text. */
-  readonly content: string;
-}
-
 /** Props for a GFM table. `head` + each `rows[i]` are pre-rendered React nodes. */
 export interface TableProps {
   /** Column alignment array — one entry per column (`"left"`, `"center"`, `"right"`, or `null`). */
@@ -150,29 +126,25 @@ export interface Components {
   /** Custom list container component. */
   readonly list?: ComponentType<ListProps>;
   /** Custom list-item component. */
-  readonly listItem?: ComponentType<ListItemProps>;
+  readonly list_item?: ComponentType<ListItemProps>;
   /** Custom heading component. */
   readonly heading?: ComponentType<HeadingProps>;
   /** Custom paragraph component. */
   readonly paragraph?: ComponentType<BaseProps>;
   /** Custom fenced/indented code-block component. */
-  readonly codeBlock?: ComponentType<CodeBlockProps>;
-  /** Custom raw-HTML block component. */
-  readonly htmlBlock?: ComponentType<HtmlProps>;
+  readonly code_block?: ComponentType<CodeBlockProps>;
   /** Custom horizontal-rule (thematic break) component. */
   readonly hr?: ComponentType<Record<never, never>>;
   /** Custom GFM table component. */
   readonly table?: ComponentType<TableProps>;
   /** Custom display-math block component. */
-  readonly mathBlock?: ComponentType<MathProps>;
+  readonly math_block?: ComponentType<MathProps>;
   /** Custom plain-text component. */
   readonly text?: ComponentType<{ readonly content: string }>;
-  /** Custom soft-break component. */
-  readonly softbreak?: ComponentType<Record<never, never>>;
   /** Custom hard-break component. */
   readonly hardbreak?: ComponentType<Record<never, never>>;
   /** Custom inline code-span component. */
-  readonly codeSpan?: ComponentType<CodeSpanProps>;
+  readonly code_span?: ComponentType<CodeSpanProps>;
   /** Custom emphasis (italic) component. */
   readonly em?: ComponentType<BaseProps>;
   /** Custom strong (bold) component. */
@@ -183,12 +155,10 @@ export interface Components {
   readonly link?: ComponentType<LinkProps>;
   /** Custom image component. */
   readonly image?: ComponentType<ImageProps>;
-  /** Custom inline-HTML component. */
-  readonly htmlInline?: ComponentType<HtmlProps>;
   /** Custom backslash-escape component. */
   readonly escape?: ComponentType<{ readonly content: string }>;
   /** Custom inline-math component. */
-  readonly mathInline?: ComponentType<MathProps>;
+  readonly math_inline?: ComponentType<MathProps>;
 }
 
 /** Options accepted by `renderReactNative`. All fields optional. */
@@ -205,17 +175,6 @@ export interface RenderReactNativeOptions {
   readonly theme?: Theme;
   /** Plugin pipeline applied to the token tree before rendering. */
   readonly plugins?: ReadonlyArray<Plugin>;
-  /**
-   * Opt-in flag mirroring `@streamd/react`'s `allowDangerousMetaHtml`.
-   * Default: `false`.
-   *
-   * **Security** — React Native has no native way to render raw HTML,
-   * so the built-in components ignore the flag. It is forwarded to
-   * custom `codeBlock` overrides (for example, a WebView-backed
-   * implementation) so authors can opt in to plugin-supplied HTML only
-   * when every plugin is trusted.
-   */
-  readonly allowDangerousMetaHtml?: boolean;
 }
 
 /**
@@ -274,8 +233,7 @@ export type {
   CodeBlockToken,
   CodeSpanToken,
   HeadingToken,
-  HtmlBlockToken,
-  HtmlInlineToken,
+  HighlightData,
   ImageToken,
   InlineToken,
   LinkToken,
@@ -288,6 +246,7 @@ export type {
   StrongToken,
   TableToken,
   TextToken,
+  ThemedSegment,
   Token,
   TokensList,
 };

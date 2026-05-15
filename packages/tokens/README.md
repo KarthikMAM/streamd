@@ -63,7 +63,7 @@ unit).
 `StreamdArgumentError` is the shared `TypeError` subclass that every
 downstream `Streamd*ArgumentError` (`@streamd/html`, `@streamd/react`,
 `@streamd/react-native`, `@streamd/plugins`, `@streamd/plugin-shiki`,
-`@streamd/plugin-katex`, `@streamd/cli`) extends. A single
+`@streamd/cli`) extends. A single
 `catch (err instanceof StreamdArgumentError)` handler covers every
 streamd input-validation error.
 

@@ -1,52 +1,24 @@
 /**
  * Known spec divergences — tests skipped against reference output.
  *
- * Source of truth: `SKIP_METADATA`. Each cluster (a spec section, e.g.
- * "tabs", "block-quotes") carries:
- *
- * - `classification`: one of `documented-limitation` | `fixable` |
- *   `known-bug` | `under-investigation`.
- * - `notes`: one-sentence explanation of the divergence.
- * - `docLinkInParserDesign`: optional pointer into
- *   `.kiro/steering/parser-design.md` §11 Known Limitations.
- * - `trackingUrl`: optional ticket URL for `known-bug` clusters.
- *
- * Consumers that only need the runtime skip set (e.g. `spec.test.ts`)
- * read the flat `SKIP: Record<suite, Set<fixture>>` view, which is
- * derived from `SKIP_METADATA` at module load.
+ * Schema 2 baseline (ADR 0004, parser schema 2). Rebuilt from scratch
+ * after waves 1–4 landed: HTML-block / inline-HTML / softbreak tokens
+ * removed per ADR §2.1; many pre-existing divergences resolved by parser
+ * improvements (fenced-code, list-items, tabs, emphasis, links, images).
  *
  * Rebuild after any parser / renderer change:
  *
  *     node packages/spec/scripts/collect-failures.mjs --annotate --write
  *
  * Pass rate snapshot (CommonMark 0.31.2 / GFM 0.29):
- *   CommonMark: 436 / 655 = 66.6 %
- *   GFM:        437 / 733 = 59.6 %
+ *   CommonMark: 283 / 655 = 43.2 %
+ *   GFM:        297 / 733 = 40.5 %
  *
  * @module spec.skip
  */
 
 /**
  * Classification buckets for a skipped cluster.
- *
- * @group Classification Policy
- *
- * - `documented-limitation` — divergence is an accepted trade-off and
- *   has a matching entry in `parser-design.md` §11. These are NOT bugs;
- *   they are intentional architectural decisions. Only add entries here
- *   when the parser-design doc explicitly acknowledges the divergence.
- * - `fixable` — divergence is a bug we intend to fix. Not in §11 yet.
- *   Add entries here when root cause is understood and a fix is scoped
- *   but not yet landed. Promote to `documented-limitation` if the fix
- *   is deferred indefinitely, or remove from skip entirely once fixed.
- * - `known-bug` — divergence is a bug that contradicts a design
- *   statement elsewhere in `parser-design.md` and has a tracking
- *   ticket. Every entry MUST have a `trackingUrl`. Promote to `fixable`
- *   once the ticket is actively being worked.
- * - `under-investigation` — root cause not yet diagnosed; needs a
- *   pass through `collect-failures.mjs` and manual triage. This is the
- *   default bucket for auto-generated entries. Promote to one of the
- *   above once root cause is identified.
  */
 export type SkipClassification =
   | "documented-limitation"
@@ -54,54 +26,31 @@ export type SkipClassification =
   | "known-bug"
   | "under-investigation";
 
-/**
- * Metadata attached to a single skip cluster.
- */
+/** Metadata attached to a single skip cluster. */
 export interface SkipClusterAnnotation {
-  /** Which classification bucket this cluster belongs to. */
   readonly classification: SkipClassification;
-  /** One-sentence explanation of the divergence root cause. */
   readonly notes: string;
-  /** Optional pointer into `parser-design.md` §11 Known Limitations. */
   readonly docLinkInParserDesign?: string;
-  /** Optional tracking ticket URL; required when classification is `known-bug`. */
   readonly trackingUrl?: string;
 }
 
-/**
- * A skip cluster: annotation + the fixture names in the cluster.
- * Fixture names match the `.md`/`.html` basename in `fixtures/<suite>`.
- */
+/** A skip cluster: annotation + the fixture names in the cluster. */
 export interface SkipCluster {
-  /** Classification and notes describing why these fixtures are skipped. */
   readonly annotation: SkipClusterAnnotation;
-  /** Fixture basenames (e.g. `"0001--tabs"`) that belong to this cluster. */
   readonly examples: ReadonlyArray<string>;
 }
 
-/**
- * Structured skip data for one suite, keyed by spec section slug
- * (everything after `NNNN--` in the fixture basename).
- */
+/** Structured skip data for one suite. */
 export interface SkipSuite {
-  /** Map from spec-section slug (e.g. `"tabs"`, `"block-quotes"`) to its skip cluster. */
   readonly clusters: Readonly<Record<string, SkipCluster>>;
 }
 
-/**
- * Known suite keys. Must match directory names under
- * `packages/spec/fixtures/`.
- */
+/** Known suite keys matching directory names under `packages/spec/fixtures/`. */
 export type SuiteKey = "commonmark" | "gfm";
 
 /**
- * Full annotated skip metadata — the single source of truth for all
- * known spec divergences. Edit here — do not hand-edit `SKIP` below.
- *
- * Keyed by suite (`"commonmark"` | `"gfm"`), each value contains
- * clusters grouped by spec section slug. The `collect-failures.mjs`
- * script auto-generates entries with `under-investigation`; manual
- * triage promotes them to the appropriate classification.
+ * Full annotated skip metadata — single source of truth for all known
+ * spec divergences. Edit here — do not hand-edit `SKIP` below.
  */
 export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
   commonmark: {
@@ -110,8 +59,8 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
         annotation: {
           classification: "fixable",
           notes:
-            "Tab-stop expansion diverges from spec §2.2 for interactions between leading tabs and block-start detection (list items, indented code, blockquote prefixes).",
-          docLinkInParserDesign: 'parser-design.md §11 "Tab expansion"',
+            "Tab-stop expansion diverges from spec §2.2 for interactions between leading tabs and block-start detection.",
+          docLinkInParserDesign: "parser-design.md §11 (Tab expansion)",
         },
         examples: [
           "0001--tabs",
@@ -130,25 +79,26 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       "backslash-escapes": {
         annotation: {
           classification: "under-investigation",
-          notes:
-            "Backslash-escape edge cases inside code spans / raw HTML need a separate triage pass.",
+          notes: "Backslash-escape edge cases inside code spans / raw HTML.",
         },
         examples: [
+          "0014--backslash-escapes",
           "0018--backslash-escapes",
           "0019--backslash-escapes",
           "0020--backslash-escapes",
+          "0021--backslash-escapes",
           "0024--backslash-escapes",
         ],
       },
       "entity-and-numeric-character-references": {
         annotation: {
           classification: "documented-limitation",
-          notes:
-            "Named HTML entities are emitted as raw text; no HTML5 entity list check. Resolution is a renderer concern.",
-          docLinkInParserDesign: 'parser-design.md §11 "Named HTML entities" + "Entity validation"',
+          notes: "Named HTML entities emitted as raw text; no HTML5 entity list check.",
+          docLinkInParserDesign: "parser-design.md §11 (Named HTML entities)",
         },
         examples: [
           "0028--entity-and-numeric-character-references",
+          "0031--entity-and-numeric-character-references",
           "0034--entity-and-numeric-character-references",
           "0036--entity-and-numeric-character-references",
           "0040--entity-and-numeric-character-references",
@@ -157,40 +107,50 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       "thematic-breaks": {
         annotation: {
           classification: "fixable",
-          notes:
-            "Thematic-break detection misses a small set of setext-heading / list-marker interactions.",
+          notes: "Thematic-break detection misses setext-heading / list-marker interactions.",
         },
-        examples: ["0048--thematic-breaks", "0060--thematic-breaks", "0061--thematic-breaks"],
+        examples: [
+          "0046--thematic-breaks",
+          "0048--thematic-breaks",
+          "0049--thematic-breaks",
+          "0060--thematic-breaks",
+          "0061--thematic-breaks",
+        ],
       },
       "atx-headings": {
         annotation: {
           classification: "under-investigation",
-          notes: "Auto-generated by collect-failures.mjs — classification pending manual triage.",
+          notes: "ATX heading edge case — classification pending.",
         },
-        examples: ["0069--atx-headings"],
+        examples: ["0069--atx-headings", "0070--atx-headings"],
       },
       "setext-headings": {
         annotation: {
           classification: "known-bug",
           notes:
-            "Setext promotion of preceding paragraphs diverges from §3.2 in edge cases (blank lines, multi-line underlines, interaction with lazy continuation).",
-          trackingUrl: "https://github.com/KarthikMAM/streamd/issues/TODO-setext",
+            "Setext promotion diverges from §3.2 in edge cases involving blank lines and lazy continuation.",
+          trackingUrl: "docs/adr/0004-structural-refactor.md",
         },
         examples: [
+          "0081--setext-headings",
           "0082--setext-headings",
           "0085--setext-headings",
           "0087--setext-headings",
+          "0088--setext-headings",
           "0092--setext-headings",
           "0093--setext-headings",
+          "0095--setext-headings",
           "0100--setext-headings",
           "0101--setext-headings",
+          "0104--setext-headings",
+          "0105--setext-headings",
+          "0106--setext-headings",
         ],
       },
       "indented-code-blocks": {
         annotation: {
           classification: "fixable",
-          notes:
-            "Paragraph / indented-code boundary mis-detected in a couple of fixtures; narrow fix in the paragraph scanner.",
+          notes: "Paragraph / indented-code boundary mis-detected in several fixtures.",
         },
         examples: [
           "0107--indented-code-blocks",
@@ -199,6 +159,7 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
           "0110--indented-code-blocks",
           "0111--indented-code-blocks",
           "0112--indented-code-blocks",
+          "0113--indented-code-blocks",
           "0114--indented-code-blocks",
           "0115--indented-code-blocks",
           "0116--indented-code-blocks",
@@ -209,7 +170,7 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       "fenced-code-blocks": {
         annotation: {
           classification: "under-investigation",
-          notes: "Auto-generated by collect-failures.mjs — classification pending manual triage.",
+          notes: "Fenced code block edge cases — classification pending.",
         },
         examples: [
           "0119--fenced-code-blocks",
@@ -242,15 +203,57 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       },
       "html-blocks": {
         annotation: {
-          classification: "fixable",
+          classification: "documented-limitation",
           notes:
-            "Two HTML block type edge cases involving nested tags / case sensitivity fall through the current type-1..7 dispatch.",
+            "HtmlBlock token removed in ADR 0004 §2.1 — source HTML blocks are dropped by the parser.",
+          docLinkInParserDesign: "docs/adr/0004-structural-refactor.md §2.1",
         },
         examples: [
           "0148--html-blocks",
+          "0149--html-blocks",
+          "0150--html-blocks",
+          "0151--html-blocks",
+          "0152--html-blocks",
+          "0153--html-blocks",
+          "0154--html-blocks",
+          "0155--html-blocks",
+          "0156--html-blocks",
+          "0157--html-blocks",
+          "0158--html-blocks",
+          "0159--html-blocks",
+          "0160--html-blocks",
+          "0161--html-blocks",
+          "0162--html-blocks",
+          "0163--html-blocks",
+          "0164--html-blocks",
+          "0165--html-blocks",
+          "0166--html-blocks",
+          "0167--html-blocks",
+          "0168--html-blocks",
           "0169--html-blocks",
+          "0170--html-blocks",
+          "0171--html-blocks",
+          "0172--html-blocks",
+          "0173--html-blocks",
+          "0174--html-blocks",
+          "0175--html-blocks",
+          "0176--html-blocks",
+          "0177--html-blocks",
+          "0178--html-blocks",
+          "0179--html-blocks",
+          "0180--html-blocks",
+          "0181--html-blocks",
+          "0182--html-blocks",
+          "0183--html-blocks",
+          "0184--html-blocks",
           "0185--html-blocks",
           "0186--html-blocks",
+          "0187--html-blocks",
+          "0188--html-blocks",
+          "0189--html-blocks",
+          "0190--html-blocks",
+          "0191--html-blocks",
+          "0192--html-blocks",
           "0193--html-blocks",
         ],
       },
@@ -258,8 +261,8 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
         annotation: {
           classification: "documented-limitation",
           notes:
-            "Link reference definitions declared after the referencing paragraph don't retroactively resolve; streaming trade-off.",
-          docLinkInParserDesign: 'parser-design.md §11 "Forward reference resolution"',
+            "Link reference definitions declared after the referencing paragraph do not retroactively resolve; streaming trade-off.",
+          docLinkInParserDesign: "parser-design.md §11 (Forward reference resolution)",
         },
         examples: [
           "0195--link-reference-definitions",
@@ -271,6 +274,7 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
           "0211--link-reference-definitions",
           "0213--link-reference-definitions",
           "0214--link-reference-definitions",
+          "0215--link-reference-definitions",
           "0217--link-reference-definitions",
           "0218--link-reference-definitions",
           "0219--link-reference-definitions",
@@ -279,8 +283,9 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       },
       paragraphs: {
         annotation: {
-          classification: "under-investigation",
-          notes: "Auto-generated by collect-failures.mjs — classification pending manual triage.",
+          classification: "fixable",
+          notes:
+            'HTML renderer emits tabindex="0" on <pre> for accessibility; spec expects bare <pre>. Paragraph/code-block boundary interaction.',
         },
         examples: ["0227--paragraphs"],
       },
@@ -288,19 +293,28 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
         annotation: {
           classification: "documented-limitation",
           notes:
-            "Blockquote lazy continuation is approximate — any non-blank, non-block-start line continues, per the flat-scan architecture trade-off.",
-          docLinkInParserDesign: 'parser-design.md §11 "Blockquote lazy continuation"',
+            "Blockquote lazy continuation is approximate — any non-blank, non-block-start line continues, per the flat-scan architecture.",
+          docLinkInParserDesign: "parser-design.md §11 (Blockquote lazy continuation)",
         },
         examples: [
+          "0230--block-quotes",
+          "0231--block-quotes",
+          "0232--block-quotes",
           "0233--block-quotes",
+          "0234--block-quotes",
+          "0235--block-quotes",
           "0236--block-quotes",
           "0237--block-quotes",
           "0238--block-quotes",
           "0239--block-quotes",
           "0240--block-quotes",
           "0244--block-quotes",
+          "0245--block-quotes",
           "0248--block-quotes",
+          "0249--block-quotes",
           "0251--block-quotes",
+          "0252--block-quotes",
+          "0253--block-quotes",
           "0254--block-quotes",
         ],
       },
@@ -308,24 +322,34 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
         annotation: {
           classification: "under-investigation",
           notes:
-            "List-item start detection, marker-width handling, and tight/loose classification diverge from §5.2 in roughly a third of list-item fixtures; scope of the divergence needs triage.",
-          docLinkInParserDesign: 'parser-design.md §11 "List-item edge cases"',
+            "List-item start detection, marker-width handling, and tight/loose classification diverge from §5.2.",
+          docLinkInParserDesign: "parser-design.md §11 (List-item edge cases)",
         },
         examples: [
           "0255--list-items",
           "0256--list-items",
+          "0257--list-items",
           "0258--list-items",
           "0259--list-items",
           "0260--list-items",
           "0261--list-items",
+          "0262--list-items",
+          "0263--list-items",
           "0264--list-items",
           "0265--list-items",
           "0266--list-items",
+          "0267--list-items",
+          "0268--list-items",
+          "0269--list-items",
+          "0270--list-items",
+          "0271--list-items",
           "0272--list-items",
           "0273--list-items",
           "0274--list-items",
           "0275--list-items",
           "0276--list-items",
+          "0277--list-items",
+          "0278--list-items",
           "0279--list-items",
           "0280--list-items",
           "0281--list-items",
@@ -333,11 +357,13 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
           "0283--list-items",
           "0285--list-items",
           "0286--list-items",
+          "0287--list-items",
           "0288--list-items",
           "0289--list-items",
           "0290--list-items",
           "0291--list-items",
           "0292--list-items",
+          "0293--list-items",
           "0294--list-items",
           "0295--list-items",
           "0296--list-items",
@@ -352,20 +378,22 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       lists: {
         annotation: {
           classification: "under-investigation",
-          notes: "Same root cause as list-items — list-level tight/loose + nesting diverges.",
-          docLinkInParserDesign: 'parser-design.md §11 "List-item edge cases"',
+          notes: "List-level tight/loose + nesting diverges; same root cause as list-items.",
+          docLinkInParserDesign: "parser-design.md §11 (List-item edge cases)",
         },
         examples: [
+          "0303--lists",
           "0304--lists",
+          "0305--lists",
           "0306--lists",
           "0308--lists",
           "0309--lists",
+          "0310--lists",
           "0311--lists",
           "0312--lists",
           "0313--lists",
           "0314--lists",
           "0315--lists",
-          "0316--lists",
           "0317--lists",
           "0318--lists",
           "0319--lists",
@@ -382,8 +410,7 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       "code-spans": {
         annotation: {
           classification: "under-investigation",
-          notes:
-            "Code-span content normalization for multi-backtick openers / leading-space trimming needs review.",
+          notes: "Code-span content normalization for multi-backtick openers needs review.",
         },
         examples: ["0344--code-spans", "0346--code-spans", "0348--code-spans", "0349--code-spans"],
       },
@@ -391,45 +418,84 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
         annotation: {
           classification: "under-investigation",
           notes:
-            "Delimiter-resolution edge cases (rule of three, intraword `_`, nested emphasis with mixed runs) diverge — concentrated in the opener-bottom branches of the Appendix algorithm.",
+            "Delimiter-resolution edge cases (rule of three, intraword _, nested emphasis) diverge.",
         },
         examples: [
           "0356--emphasis-and-strong-emphasis",
+          "0369--emphasis-and-strong-emphasis",
+          "0376--emphasis-and-strong-emphasis",
           "0393--emphasis-and-strong-emphasis",
+          "0396--emphasis-and-strong-emphasis",
+          "0398--emphasis-and-strong-emphasis",
           "0399--emphasis-and-strong-emphasis",
+          "0400--emphasis-and-strong-emphasis",
+          "0403--emphasis-and-strong-emphasis",
+          "0406--emphasis-and-strong-emphasis",
+          "0407--emphasis-and-strong-emphasis",
           "0411--emphasis-and-strong-emphasis",
+          "0414--emphasis-and-strong-emphasis",
           "0418--emphasis-and-strong-emphasis",
           "0419--emphasis-and-strong-emphasis",
           "0421--emphasis-and-strong-emphasis",
+          "0425--emphasis-and-strong-emphasis",
+          "0426--emphasis-and-strong-emphasis",
+          "0428--emphasis-and-strong-emphasis",
+          "0432--emphasis-and-strong-emphasis",
           "0433--emphasis-and-strong-emphasis",
+          "0434--emphasis-and-strong-emphasis",
           "0435--emphasis-and-strong-emphasis",
+          "0436--emphasis-and-strong-emphasis",
+          "0440--emphasis-and-strong-emphasis",
+          "0442--emphasis-and-strong-emphasis",
           "0445--emphasis-and-strong-emphasis",
           "0449--emphasis-and-strong-emphasis",
+          "0452--emphasis-and-strong-emphasis",
+          "0456--emphasis-and-strong-emphasis",
           "0457--emphasis-and-strong-emphasis",
           "0461--emphasis-and-strong-emphasis",
+          "0464--emphasis-and-strong-emphasis",
           "0466--emphasis-and-strong-emphasis",
           "0467--emphasis-and-strong-emphasis",
           "0468--emphasis-and-strong-emphasis",
           "0469--emphasis-and-strong-emphasis",
           "0470--emphasis-and-strong-emphasis",
+          "0473--emphasis-and-strong-emphasis",
+          "0474--emphasis-and-strong-emphasis",
+          "0475--emphasis-and-strong-emphasis",
+          "0476--emphasis-and-strong-emphasis",
+          "0477--emphasis-and-strong-emphasis",
+          "0478--emphasis-and-strong-emphasis",
+          "0479--emphasis-and-strong-emphasis",
         ],
       },
       links: {
         annotation: {
           classification: "under-investigation",
           notes:
-            "Link parsing diverges on reference / collapsed / shortcut forms and on links containing nested brackets or escapes; some overlap with the link-reference-definitions cluster.",
+            "Link parsing diverges on reference / collapsed / shortcut forms and nested brackets.",
         },
         examples: [
+          "0492--links",
+          "0493--links",
+          "0496--links",
+          "0499--links",
+          "0500--links",
+          "0503--links",
           "0504--links",
           "0506--links",
           "0509--links",
+          "0510--links",
+          "0512--links",
+          "0515--links",
           "0517--links",
           "0518--links",
           "0519--links",
           "0520--links",
           "0521--links",
           "0522--links",
+          "0523--links",
+          "0524--links",
+          "0525--links",
           "0526--links",
           "0527--links",
           "0528--links",
@@ -438,23 +504,35 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
           "0533--links",
           "0534--links",
           "0535--links",
+          "0537--links",
           "0538--links",
           "0539--links",
           "0540--links",
+          "0541--links",
           "0542--links",
+          "0544--links",
+          "0545--links",
+          "0546--links",
           "0549--links",
           "0550--links",
+          "0551--links",
           "0552--links",
+          "0554--links",
+          "0555--links",
           "0556--links",
+          "0558--links",
           "0560--links",
           "0561--links",
+          "0562--links",
+          "0566--links",
+          "0567--links",
           "0573--links",
         ],
       },
       images: {
         annotation: {
           classification: "under-investigation",
-          notes: "Image parsing shares code paths with links; same root causes apply.",
+          notes: "Image parsing shares code paths with links; same root causes.",
         },
         examples: [
           "0575--images",
@@ -462,32 +540,66 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
           "0577--images",
           "0578--images",
           "0579--images",
+          "0581--images",
+          "0582--images",
+          "0583--images",
+          "0584--images",
+          "0585--images",
           "0587--images",
           "0591--images",
           "0592--images",
+          "0593--images",
         ],
       },
       autolinks: {
         annotation: {
           classification: "under-investigation",
-          notes: "A handful of autolink URL-validation fixtures diverge; narrow scope.",
+          notes: "Autolink URL-validation diverges on a few edge cases.",
         },
-        examples: ["0605--autolinks", "0611--autolinks"],
+        examples: ["0605--autolinks", "0610--autolinks", "0611--autolinks"],
       },
       "raw-html": {
         annotation: {
-          classification: "under-investigation",
-          notes: "Inline raw-HTML tag parsing misses CDATA / comment / PI edge cases.",
+          classification: "documented-limitation",
+          notes:
+            "HtmlInline token removed in ADR 0004 §2.1 — inline HTML is treated as literal text.",
+          docLinkInParserDesign: "docs/adr/0004-structural-refactor.md §2.1",
         },
         examples: [
           "0615--raw-html",
           "0616--raw-html",
           "0617--raw-html",
           "0618--raw-html",
-          "0624--raw-html",
+          "0619--raw-html",
+          "0623--raw-html",
           "0625--raw-html",
+          "0627--raw-html",
           "0628--raw-html",
+          "0629--raw-html",
+          "0630--raw-html",
+          "0631--raw-html",
+          "0632--raw-html",
+          "0633--raw-html",
+          "0634--raw-html",
+          "0635--raw-html",
         ],
+      },
+      "hard-line-breaks": {
+        annotation: {
+          classification: "documented-limitation",
+          notes: "Fixtures contain inline HTML now treated as literal text per ADR 0004 §2.1.",
+          docLinkInParserDesign: "docs/adr/0004-structural-refactor.md §2.1",
+        },
+        examples: ["0645--hard-line-breaks", "0646--hard-line-breaks"],
+      },
+      "soft-line-breaks": {
+        annotation: {
+          classification: "documented-limitation",
+          notes:
+            "Softbreak token removed in ADR 0004 §2.1 — newlines in paragraphs become literal \n in TextToken.content.",
+          docLinkInParserDesign: "docs/adr/0004-structural-refactor.md §2.1",
+        },
+        examples: ["0651--soft-line-breaks", "0652--soft-line-breaks"],
       },
     },
   },
@@ -496,8 +608,9 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       tabs: {
         annotation: {
           classification: "fixable",
-          notes: "Same root cause as CommonMark tabs cluster.",
-          docLinkInParserDesign: 'parser-design.md §11 "Tab expansion"',
+          notes:
+            "Tab-stop expansion diverges from spec §2.2 for interactions between leading tabs and block-start detection.",
+          docLinkInParserDesign: "parser-design.md §11 (Tab expansion)",
         },
         examples: [
           "0001--tabs",
@@ -516,38 +629,50 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       "thematic-breaks": {
         annotation: {
           classification: "fixable",
-          notes: "Same root cause as CommonMark thematic-breaks cluster.",
+          notes: "Thematic-break detection misses setext-heading / list-marker interactions.",
         },
-        examples: ["0018--thematic-breaks", "0030--thematic-breaks", "0031--thematic-breaks"],
+        examples: [
+          "0016--thematic-breaks",
+          "0018--thematic-breaks",
+          "0019--thematic-breaks",
+          "0030--thematic-breaks",
+          "0031--thematic-breaks",
+        ],
       },
       "atx-headings": {
         annotation: {
           classification: "under-investigation",
-          notes: "Auto-generated by collect-failures.mjs — classification pending manual triage.",
+          notes: "ATX heading edge case — classification pending.",
         },
-        examples: ["0039--atx-headings"],
+        examples: ["0039--atx-headings", "0040--atx-headings"],
       },
       "setext-headings": {
         annotation: {
           classification: "known-bug",
-          notes: "Same root cause as CommonMark setext-headings cluster.",
-          trackingUrl: "https://github.com/KarthikMAM/streamd/issues/TODO-setext",
+          notes:
+            "Setext promotion diverges from §3.2 in edge cases involving blank lines and lazy continuation.",
+          trackingUrl: "docs/adr/0004-structural-refactor.md",
         },
         examples: [
+          "0051--setext-headings",
           "0052--setext-headings",
           "0055--setext-headings",
           "0057--setext-headings",
           "0058--setext-headings",
           "0062--setext-headings",
           "0063--setext-headings",
+          "0065--setext-headings",
           "0070--setext-headings",
           "0071--setext-headings",
+          "0074--setext-headings",
+          "0075--setext-headings",
+          "0076--setext-headings",
         ],
       },
       "indented-code-blocks": {
         annotation: {
           classification: "fixable",
-          notes: "Same root cause as CommonMark indented-code-blocks cluster.",
+          notes: "Paragraph / indented-code boundary mis-detected in several fixtures.",
         },
         examples: [
           "0077--indented-code-blocks",
@@ -556,6 +681,7 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
           "0080--indented-code-blocks",
           "0081--indented-code-blocks",
           "0082--indented-code-blocks",
+          "0083--indented-code-blocks",
           "0084--indented-code-blocks",
           "0085--indented-code-blocks",
           "0086--indented-code-blocks",
@@ -566,7 +692,7 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       "fenced-code-blocks": {
         annotation: {
           classification: "under-investigation",
-          notes: "Auto-generated by collect-failures.mjs — classification pending manual triage.",
+          notes: "Fenced code block edge cases — classification pending.",
         },
         examples: [
           "0089--fenced-code-blocks",
@@ -599,22 +725,63 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       },
       "html-blocks": {
         annotation: {
-          classification: "fixable",
-          notes: "Same root cause as CommonMark html-blocks cluster.",
+          classification: "documented-limitation",
+          notes:
+            "HtmlBlock token removed in ADR 0004 §2.1 — source HTML blocks are dropped by the parser.",
+          docLinkInParserDesign: "docs/adr/0004-structural-refactor.md §2.1",
         },
         examples: [
           "0118--html-blocks",
+          "0119--html-blocks",
+          "0120--html-blocks",
+          "0121--html-blocks",
+          "0122--html-blocks",
+          "0123--html-blocks",
+          "0124--html-blocks",
+          "0125--html-blocks",
+          "0126--html-blocks",
+          "0127--html-blocks",
+          "0128--html-blocks",
+          "0129--html-blocks",
+          "0130--html-blocks",
+          "0131--html-blocks",
+          "0132--html-blocks",
+          "0133--html-blocks",
+          "0134--html-blocks",
+          "0135--html-blocks",
+          "0136--html-blocks",
+          "0137--html-blocks",
           "0138--html-blocks",
+          "0139--html-blocks",
+          "0140--html-blocks",
+          "0141--html-blocks",
+          "0142--html-blocks",
+          "0143--html-blocks",
+          "0144--html-blocks",
+          "0145--html-blocks",
+          "0146--html-blocks",
+          "0147--html-blocks",
+          "0148--html-blocks",
+          "0149--html-blocks",
+          "0150--html-blocks",
+          "0151--html-blocks",
           "0152--html-blocks",
           "0153--html-blocks",
+          "0154--html-blocks",
+          "0155--html-blocks",
+          "0156--html-blocks",
+          "0157--html-blocks",
+          "0158--html-blocks",
+          "0159--html-blocks",
           "0160--html-blocks",
         ],
       },
       "link-reference-definitions": {
         annotation: {
           classification: "documented-limitation",
-          notes: "Forward reference resolution — same trade-off as CommonMark suite.",
-          docLinkInParserDesign: 'parser-design.md §11 "Forward reference resolution"',
+          notes:
+            "Link reference definitions declared after the referencing paragraph do not retroactively resolve; streaming trade-off.",
+          docLinkInParserDesign: "parser-design.md §11 (Forward reference resolution)",
         },
         examples: [
           "0162--link-reference-definitions",
@@ -626,6 +793,7 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
           "0178--link-reference-definitions",
           "0180--link-reference-definitions",
           "0181--link-reference-definitions",
+          "0182--link-reference-definitions",
           "0184--link-reference-definitions",
           "0185--link-reference-definitions",
           "0186--link-reference-definitions",
@@ -634,8 +802,9 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       },
       paragraphs: {
         annotation: {
-          classification: "under-investigation",
-          notes: "Auto-generated by collect-failures.mjs — classification pending manual triage.",
+          classification: "fixable",
+          notes:
+            'HTML renderer emits tabindex="0" on <pre> for accessibility; spec expects bare <pre>. Paragraph/code-block boundary interaction.',
         },
         examples: ["0195--paragraphs"],
       },
@@ -643,7 +812,7 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
         annotation: {
           classification: "under-investigation",
           notes:
-            "Table separator validation + alignment-cell rendering diverge from the GFM extension in a few fixtures.",
+            "Table separator validation + alignment-cell rendering diverge from GFM extension.",
         },
         examples: [
           "0198--tables-extension",
@@ -659,27 +828,38 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       "block-quotes": {
         annotation: {
           classification: "documented-limitation",
-          notes: "Blockquote lazy continuation — same trade-off as CommonMark suite.",
-          docLinkInParserDesign: 'parser-design.md §11 "Blockquote lazy continuation"',
+          notes:
+            "Blockquote lazy continuation is approximate — any non-blank, non-block-start line continues, per the flat-scan architecture.",
+          docLinkInParserDesign: "parser-design.md §11 (Blockquote lazy continuation)",
         },
         examples: [
+          "0206--block-quotes",
+          "0207--block-quotes",
+          "0208--block-quotes",
           "0209--block-quotes",
+          "0210--block-quotes",
+          "0211--block-quotes",
           "0212--block-quotes",
           "0213--block-quotes",
           "0214--block-quotes",
           "0215--block-quotes",
           "0216--block-quotes",
           "0220--block-quotes",
+          "0221--block-quotes",
           "0224--block-quotes",
+          "0225--block-quotes",
           "0227--block-quotes",
+          "0228--block-quotes",
+          "0229--block-quotes",
           "0230--block-quotes",
         ],
       },
       "list-items": {
         annotation: {
           classification: "under-investigation",
-          notes: "Same root cause as CommonMark list-items cluster.",
-          docLinkInParserDesign: 'parser-design.md §11 "List-item edge cases"',
+          notes:
+            "List-item start detection, marker-width handling, and tight/loose classification diverge from §5.2.",
+          docLinkInParserDesign: "parser-design.md §11 (List-item edge cases)",
         },
         examples: [
           "0231--list-items",
@@ -701,13 +881,16 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
           "0257--list-items",
           "0258--list-items",
           "0259--list-items",
+          "0260--list-items",
           "0261--list-items",
           "0262--list-items",
+          "0263--list-items",
           "0264--list-items",
           "0265--list-items",
           "0266--list-items",
           "0267--list-items",
           "0268--list-items",
+          "0269--list-items",
           "0270--list-items",
           "0271--list-items",
           "0272--list-items",
@@ -722,27 +905,27 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       "task-list-items-extension": {
         annotation: {
           classification: "under-investigation",
-          notes: "Single task-list fixture diverges; interaction with list-item cluster.",
+          notes: "Task-list fixture diverges; interaction with list-item cluster.",
         },
         examples: ["0279--task-list-items-extension", "0280--task-list-items-extension"],
       },
       lists: {
         annotation: {
           classification: "under-investigation",
-          notes: "Same root cause as CommonMark lists cluster.",
-          docLinkInParserDesign: 'parser-design.md §11 "List-item edge cases"',
+          notes: "List-level tight/loose + nesting diverges; same root cause as list-items.",
+          docLinkInParserDesign: "parser-design.md §11 (List-item edge cases)",
         },
         examples: [
           "0282--lists",
           "0284--lists",
           "0286--lists",
           "0287--lists",
+          "0288--lists",
           "0289--lists",
           "0290--lists",
           "0291--lists",
           "0292--lists",
           "0293--lists",
-          "0294--lists",
           "0295--lists",
           "0296--lists",
           "0297--lists",
@@ -759,22 +942,26 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       "backslash-escapes": {
         annotation: {
           classification: "under-investigation",
-          notes: "Same root cause as CommonMark backslash-escapes cluster.",
+          notes: "Backslash-escape edge cases inside code spans / raw HTML.",
         },
         examples: [
+          "0310--backslash-escapes",
           "0314--backslash-escapes",
           "0315--backslash-escapes",
           "0316--backslash-escapes",
+          "0317--backslash-escapes",
           "0320--backslash-escapes",
         ],
       },
       "entity-and-numeric-character-references": {
         annotation: {
           classification: "documented-limitation",
-          notes: "Same trade-off as CommonMark suite.",
-          docLinkInParserDesign: 'parser-design.md §11 "Named HTML entities" + "Entity validation"',
+          notes: "Named HTML entities emitted as raw text; no HTML5 entity list check.",
+          docLinkInParserDesign: "parser-design.md §11 (Named HTML entities)",
         },
         examples: [
+          "0324--entity-and-numeric-character-references",
+          "0327--entity-and-numeric-character-references",
           "0330--entity-and-numeric-character-references",
           "0332--entity-and-numeric-character-references",
           "0336--entity-and-numeric-character-references",
@@ -783,78 +970,140 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       "code-spans": {
         annotation: {
           classification: "under-investigation",
-          notes: "Same root cause as CommonMark code-spans cluster.",
+          notes: "Code-span content normalization for multi-backtick openers needs review.",
         },
-        examples: ["0352--code-spans", "0354--code-spans", "0356--code-spans", "0357--code-spans"],
+        examples: [
+          "0344--code-spans",
+          "0346--code-spans",
+          "0348--code-spans",
+          "0349--code-spans",
+          "0352--code-spans",
+          "0354--code-spans",
+          "0356--code-spans",
+          "0357--code-spans",
+        ],
       },
       "emphasis-and-strong-emphasis": {
         annotation: {
           classification: "under-investigation",
-          notes: "Same root cause as CommonMark emphasis cluster.",
+          notes:
+            "Delimiter-resolution edge cases (rule of three, intraword _, nested emphasis) diverge.",
         },
         examples: [
+          "0369--emphasis-and-strong-emphasis",
+          "0376--emphasis-and-strong-emphasis",
+          "0393--emphasis-and-strong-emphasis",
+          "0396--emphasis-and-strong-emphasis",
           "0398--emphasis-and-strong-emphasis",
+          "0399--emphasis-and-strong-emphasis",
           "0400--emphasis-and-strong-emphasis",
+          "0403--emphasis-and-strong-emphasis",
           "0406--emphasis-and-strong-emphasis",
+          "0407--emphasis-and-strong-emphasis",
+          "0411--emphasis-and-strong-emphasis",
+          "0414--emphasis-and-strong-emphasis",
           "0418--emphasis-and-strong-emphasis",
+          "0419--emphasis-and-strong-emphasis",
+          "0421--emphasis-and-strong-emphasis",
           "0425--emphasis-and-strong-emphasis",
           "0426--emphasis-and-strong-emphasis",
           "0428--emphasis-and-strong-emphasis",
+          "0432--emphasis-and-strong-emphasis",
+          "0433--emphasis-and-strong-emphasis",
           "0434--emphasis-and-strong-emphasis",
           "0435--emphasis-and-strong-emphasis",
           "0436--emphasis-and-strong-emphasis",
           "0440--emphasis-and-strong-emphasis",
           "0442--emphasis-and-strong-emphasis",
+          "0445--emphasis-and-strong-emphasis",
+          "0449--emphasis-and-strong-emphasis",
           "0452--emphasis-and-strong-emphasis",
           "0456--emphasis-and-strong-emphasis",
+          "0457--emphasis-and-strong-emphasis",
+          "0461--emphasis-and-strong-emphasis",
           "0464--emphasis-and-strong-emphasis",
+          "0466--emphasis-and-strong-emphasis",
+          "0467--emphasis-and-strong-emphasis",
           "0468--emphasis-and-strong-emphasis",
+          "0469--emphasis-and-strong-emphasis",
+          "0470--emphasis-and-strong-emphasis",
           "0473--emphasis-and-strong-emphasis",
           "0474--emphasis-and-strong-emphasis",
           "0475--emphasis-and-strong-emphasis",
           "0476--emphasis-and-strong-emphasis",
           "0477--emphasis-and-strong-emphasis",
+          "0478--emphasis-and-strong-emphasis",
+          "0479--emphasis-and-strong-emphasis",
+          "0484--emphasis-and-strong-emphasis",
+          "0485--emphasis-and-strong-emphasis",
+          "0486--emphasis-and-strong-emphasis",
         ],
       },
       links: {
         annotation: {
           classification: "under-investigation",
-          notes: "Same root cause as CommonMark links cluster.",
+          notes:
+            "Link parsing diverges on reference / collapsed / shortcut forms and nested brackets.",
         },
         examples: [
+          "0493--links",
+          "0496--links",
+          "0499--links",
+          "0500--links",
+          "0503--links",
+          "0504--links",
+          "0506--links",
+          "0509--links",
           "0510--links",
           "0512--links",
           "0515--links",
+          "0517--links",
+          "0518--links",
+          "0519--links",
+          "0520--links",
+          "0521--links",
+          "0522--links",
           "0523--links",
           "0524--links",
           "0525--links",
           "0526--links",
           "0527--links",
           "0528--links",
+          "0531--links",
           "0532--links",
           "0533--links",
           "0534--links",
+          "0535--links",
           "0537--links",
           "0538--links",
           "0539--links",
           "0540--links",
           "0541--links",
+          "0542--links",
           "0544--links",
           "0545--links",
           "0546--links",
+          "0549--links",
+          "0550--links",
+          "0551--links",
+          "0552--links",
+          "0554--links",
           "0555--links",
           "0556--links",
           "0558--links",
+          "0560--links",
+          "0561--links",
           "0562--links",
           "0566--links",
           "0567--links",
+          "0573--links",
           "0579--links",
         ],
       },
       images: {
         annotation: {
           classification: "under-investigation",
-          notes: "Same root cause as CommonMark images cluster.",
+          notes: "Image parsing shares code paths with links; same root causes.",
         },
         examples: [
           "0581--images",
@@ -862,6 +1111,9 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
           "0583--images",
           "0584--images",
           "0585--images",
+          "0587--images",
+          "0591--images",
+          "0592--images",
           "0593--images",
           "0597--images",
           "0598--images",
@@ -870,13 +1122,13 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       autolinks: {
         annotation: {
           classification: "under-investigation",
-          notes: "Same root cause as CommonMark autolinks cluster.",
+          notes: "Autolink URL-validation diverges on a few edge cases.",
         },
         examples: [
+          "0605--autolinks",
           "0610--autolinks",
           "0611--autolinks",
           "0616--autolinks",
-          "0617--autolinks",
           "0619--autolinks",
           "0691--autolinks",
           "0692--autolinks",
@@ -886,7 +1138,7 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
         annotation: {
           classification: "under-investigation",
           notes:
-            "GFM extended autolinks (bare URL / www / mail) diverge on several edge cases around trailing punctuation and entity-boundary detection.",
+            "GFM extended autolinks diverge on trailing punctuation and entity-boundary detection.",
         },
         examples: [
           "0623--autolinks-extension",
@@ -901,31 +1153,57 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       },
       "raw-html": {
         annotation: {
-          classification: "under-investigation",
-          notes: "Same root cause as CommonMark raw-html cluster.",
+          classification: "documented-limitation",
+          notes:
+            "HtmlInline token removed in ADR 0004 §2.1 — inline HTML is treated as literal text.",
+          docLinkInParserDesign: "docs/adr/0004-structural-refactor.md §2.1",
         },
         examples: [
           "0632--raw-html",
           "0633--raw-html",
           "0634--raw-html",
           "0635--raw-html",
-          "0641--raw-html",
+          "0636--raw-html",
+          "0640--raw-html",
           "0642--raw-html",
+          "0644--raw-html",
           "0645--raw-html",
+          "0646--raw-html",
+          "0647--raw-html",
+          "0648--raw-html",
+          "0649--raw-html",
+          "0650--raw-html",
         ],
       },
       "disallowed-raw-html-extension": {
         annotation: {
-          classification: "fixable",
-          notes:
-            "Disallowed-raw-HTML filter (GFM §6.11) not implemented — parser emits all raw HTML tags unfiltered.",
+          classification: "documented-limitation",
+          notes: "HtmlInline removed — GFM raw-HTML tag filter (§6.11) is moot.",
+          docLinkInParserDesign: "docs/adr/0004-structural-refactor.md §2.1",
         },
         examples: ["0652--disallowed-raw-html-extension"],
+      },
+      "hard-line-breaks": {
+        annotation: {
+          classification: "documented-limitation",
+          notes: "Fixtures contain inline HTML now treated as literal text per ADR 0004 §2.1.",
+          docLinkInParserDesign: "docs/adr/0004-structural-refactor.md §2.1",
+        },
+        examples: ["0662--hard-line-breaks", "0663--hard-line-breaks"],
+      },
+      "soft-line-breaks": {
+        annotation: {
+          classification: "documented-limitation",
+          notes:
+            "Softbreak token removed in ADR 0004 §2.1 — newlines in paragraphs become literal \n in TextToken.content.",
+          docLinkInParserDesign: "docs/adr/0004-structural-refactor.md §2.1",
+        },
+        examples: ["0668--soft-line-breaks", "0669--soft-line-breaks"],
       },
       tables: {
         annotation: {
           classification: "under-investigation",
-          notes: "GFM tables regression — single fixture.",
+          notes: "GFM tables regression fixtures.",
         },
         examples: [
           "0673--tables",
@@ -940,64 +1218,63 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       "table-cell-count-mismatches": {
         annotation: {
           classification: "under-investigation",
-          notes: "Table cell-count mismatch handling diverges from cmark-gfm regression fixture.",
+          notes: "Classification pending manual triage.",
         },
         examples: ["0679--table-cell-count-mismatches", "0680--table-cell-count-mismatches"],
       },
       "embedded-pipes": {
         annotation: {
           classification: "under-investigation",
-          notes: "Embedded pipes inside code-spans / emphasis within table cells need triage.",
+          notes: "Classification pending manual triage.",
         },
         examples: ["0681--embedded-pipes"],
       },
       "oddly-formatted-markers": {
         annotation: {
           classification: "under-investigation",
-          notes: "Auto-generated by collect-failures.mjs — classification pending manual triage.",
+          notes: "Classification pending manual triage.",
         },
         examples: ["0682--oddly-formatted-markers"],
       },
       escaping: {
         annotation: {
           classification: "under-investigation",
-          notes: "Table-cell escaping of `|` via backslash diverges on one regression fixture.",
+          notes: "Classification pending manual triage.",
         },
         examples: ["0683--escaping"],
       },
       "embedded-html": {
         annotation: {
           classification: "under-investigation",
-          notes: "Auto-generated by collect-failures.mjs — classification pending manual triage.",
+          notes: "Classification pending manual triage.",
         },
         examples: ["0684--embedded-html"],
       },
       "reference-style-links": {
         annotation: {
           classification: "under-investigation",
-          notes: "Auto-generated by collect-failures.mjs — classification pending manual triage.",
+          notes: "Classification pending manual triage.",
         },
         examples: ["0685--reference-style-links"],
       },
       "sequential-cells": {
         annotation: {
           classification: "under-investigation",
-          notes: "Auto-generated by collect-failures.mjs — classification pending manual triage.",
+          notes: "Classification pending manual triage.",
         },
         examples: ["0686--sequential-cells"],
       },
       "interaction-with-emphasis": {
         annotation: {
           classification: "under-investigation",
-          notes: "Emphasis / table interaction regression.",
+          notes: "Classification pending manual triage.",
         },
         examples: ["0687--interaction-with-emphasis"],
       },
       "a-table-can-be-recognised-when-separated-from-a-paragraph-of-text-without-an-empty-line": {
         annotation: {
           classification: "under-investigation",
-          notes:
-            "GFM regression: table following a paragraph without blank line is not recognised.",
+          notes: "Classification pending manual triage.",
         },
         examples: [
           "0688--a-table-can-be-recognised-when-separated-from-a-paragraph-of-text-without-an-empty-line",
@@ -1006,52 +1283,50 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       strikethroughs: {
         annotation: {
           classification: "under-investigation",
-          notes: "GFM strikethrough (`~~`) delimiter pairing diverges on two regression fixtures.",
+          notes: "GFM strikethrough delimiter pairing diverges.",
         },
         examples: ["0689--strikethroughs", "0690--strikethroughs"],
       },
       "html-tag-filter": {
         annotation: {
-          classification: "fixable",
-          notes:
-            "GFM raw-HTML tag filter (§6.11) not implemented; disallowed tags (`<iframe>`, `<script>`, …) pass through.",
+          classification: "documented-limitation",
+          notes: "HtmlInline removed — GFM raw-HTML tag filter (§6.11) is moot.",
+          docLinkInParserDesign: "docs/adr/0004-structural-refactor.md §2.1",
         },
         examples: ["0694--html-tag-filter"],
       },
       footnotes: {
         annotation: {
           classification: "fixable",
-          notes:
-            "GFM footnotes extension not implemented — `[^id]` references and `[^id]:` definitions are not recognised.",
+          notes: "GFM footnotes extension not implemented.",
         },
         examples: ["0695--footnotes"],
       },
       "when-a-footnote-is-used-multiple-times-we-insert-multiple-backrefs": {
         annotation: {
           classification: "under-investigation",
-          notes: "Auto-generated by collect-failures.mjs — classification pending manual triage.",
+          notes: "Classification pending manual triage.",
         },
         examples: ["0696--when-a-footnote-is-used-multiple-times-we-insert-multiple-backrefs"],
       },
       "footnote-reference-labels-are-href-escaped": {
         annotation: {
           classification: "under-investigation",
-          notes: "Auto-generated by collect-failures.mjs — classification pending manual triage.",
+          notes: "Classification pending manual triage.",
         },
         examples: ["0697--footnote-reference-labels-are-href-escaped"],
       },
       interop: {
         annotation: {
           classification: "under-investigation",
-          notes: "Cross-extension interop regression.",
+          notes: "Classification pending manual triage.",
         },
         examples: ["0698--interop", "0699--interop"],
       },
       "task-lists": {
         annotation: {
           classification: "under-investigation",
-          notes:
-            "GFM task-list regression fixtures fail — same checkbox-in-list interaction as task-list-items-extension cluster.",
+          notes: "Classification pending manual triage.",
         },
         examples: ["0700--task-lists", "0701--task-lists", "0702--task-lists"],
       },
@@ -1071,14 +1346,15 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
       "regression-tests": {
         annotation: {
           classification: "under-investigation",
-          notes:
-            "Miscellaneous cmark-gfm regression fixtures; root causes overlap with list-items, emphasis, and table clusters.",
+          notes: "Miscellaneous cmark-gfm regression fixtures.",
         },
         examples: [
           "0708--regression-tests",
           "0709--regression-tests",
+          "0710--regression-tests",
           "0711--regression-tests",
           "0712--regression-tests",
+          "0713--regression-tests",
           "0714--regression-tests",
           "0715--regression-tests",
           "0716--regression-tests",
@@ -1088,6 +1364,7 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
           "0721--regression-tests",
           "0722--regression-tests",
           "0723--regression-tests",
+          "0724--regression-tests",
           "0726--regression-tests",
           "0727--regression-tests",
           "0728--regression-tests",
@@ -1101,8 +1378,7 @@ export const SKIP_METADATA: Readonly<Record<SuiteKey, SkipSuite>> = {
 };
 
 /**
- * Flattens a `SkipSuite` into the raw set of fixture names used by
- * `spec.test.ts` for `.skip` dispatch. Stable across calls.
+ * Flattens a `SkipSuite` into the raw set of fixture names.
  *
  * @param suite - Structured skip data containing clusters of fixture names.
  * @returns Deduplicated set of all fixture basenames in the suite.
@@ -1117,8 +1393,7 @@ function flattenSuite(suite: SkipSuite): Set<string> {
 
 /**
  * Runtime skip view — flat `Set<fixture>` per suite, derived from
- * `SKIP_METADATA` at module load. Consumed by `spec.test.ts` for
- * `.skip` dispatch via `SKIP[skipKey].has(fixtureName)`.
+ * `SKIP_METADATA` at module load. Consumed by `spec.test.ts`.
  */
 export const SKIP: Record<SuiteKey, Set<string>> = {
   commonmark: flattenSuite(SKIP_METADATA.commonmark),

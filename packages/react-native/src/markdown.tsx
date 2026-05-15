@@ -26,21 +26,10 @@ import type {
 import { assertHasInput, assertStringChunk } from "./validation";
 
 /**
- * Extract defined optional fields from props for the render call.
+ * Build render options from component props.
  *
- * @param props - Component props to extract from.
- * @returns Partial render options containing only defined fields.
- */
-function pickDefinedProps(props: StreamdMarkdownNativeProps): Partial<RenderReactNativeOptions> {
-  return {
-    ...(props.components ? { components: props.components } : {}),
-    ...(props.math ? { math: props.math } : {}),
-    ...(props.taskListCheckboxes ? { taskListCheckboxes: props.taskListCheckboxes } : {}),
-  };
-}
-
-/**
- * Build render options from component props, omitting undefined fields.
+ * Uses spread-conditional pattern to avoid passing `undefined` values
+ * (required by `exactOptionalPropertyTypes`).
  *
  * @param props - Component props to merge.
  * @param theme - Resolved theme override (from props or context).
@@ -50,19 +39,20 @@ function buildRenderOptions(
   props: StreamdMarkdownNativeProps,
   theme: StreamdMarkdownNativeProps["theme"],
 ): RenderReactNativeOptions {
-  return {
-    ...pickDefinedProps(props),
-    ...(props.onLinkPress ? { onLinkPress: props.onLinkPress } : {}),
-    ...(props.plugins ? { plugins: props.plugins } : {}),
-    ...(theme ? { theme } : {}),
-    ...(props.allowDangerousMetaHtml === true ? { allowDangerousMetaHtml: true } : {}),
-  };
+  return Object.fromEntries(
+    Object.entries({
+      components: props.components,
+      math: props.math,
+      taskListCheckboxes: props.taskListCheckboxes,
+      onLinkPress: props.onLinkPress,
+      plugins: props.plugins,
+      theme,
+    }).filter(([, v]) => v !== undefined),
+  ) as RenderReactNativeOptions;
 }
 
 /**
- * Stable signature for a `parseOptions` object. Used by
- * `useStreamingMarkdown` to detect value-level changes without suffering
- * from parent-render object-identity churn.
+ * Stable signature for a `parseOptions` object.
  *
  * @param options Parser options value as received by the hook.
  * @returns A deterministic string encoding of the options.
@@ -79,9 +69,7 @@ interface StreamStateRef {
 }
 
 /**
- * Parse `src` and update the streaming state ref in a single
- * monomorphic record. Used on mount, reset, and when `parseOptions`
- * change forces the parser to restart.
+ * Parse `src` and update the streaming state ref.
  *
  * @param src Accumulated source to parse.
  * @param parser Existing parser state, or `null` for a fresh parse.
@@ -131,19 +119,8 @@ export function StreamdMarkdownNative(props: StreamdMarkdownNativeProps): ReactN
 /**
  * Hook for incremental LLM-style streaming parses on React Native.
  *
- * Maintains parser + accumulated-source state across calls. Call
- * `append` as each chunk arrives; the returned `tokens` / `stableCount`
- * are re-computed incrementally.
- *
- * `parseOptions` is reactive — changing any field (for example toggling
- * `gfm`) resets the parser and re-parses the accumulated source so
- * subsequent `append` calls honour the new options.
- *
- * `append` wraps its state update in `startTransition` so the parse +
- * render work stays interruptible while the LLM feed is active.
- *
  * @param initialSource Optional starting source. Default: `""`.
- * @param parseOptions Parser options. Reactive — see note above.
+ * @param parseOptions Parser options. Reactive — changing resets the parser.
  * @throws {@link StreamdReactNativeArgumentError} (kind `"invalid-chunk"`)
  *   from `append` when the caller passes a non-string value.
  */

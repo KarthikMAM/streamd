@@ -29,7 +29,7 @@ streams)` API so tests and downstream tools can drive the pipeline
   ```
 
   Full flag reference, streaming-mode semantics, and security notes in
-  [`packages/cli/README.md`](../packages/cli/README.md).
+  [`packages/cli/README.md`](./README.md).
 
 ### Patch Changes
 

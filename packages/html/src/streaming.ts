@@ -29,17 +29,11 @@ export interface StreamHtmlOptions extends RenderHtmlOptions {
  * Intended for the streaming LLM case where the caller incrementally
  * appends to `src` and wants HTML on each call.
  *
- * All {@link RenderHtmlOptions} fields — including the opt-in
- * `allowDangerousMetaHtml` flag — are forwarded verbatim to the
- * underlying `renderHtml` call. Callers streaming untrusted markdown
- * should leave `allowDangerousMetaHtml` at its `false` default so
- * plugin-attached `meta.html` is ignored; see `RenderHtmlOptions` for
- * the full security contract.
- *
  * @param src - Full accumulated markdown source so far. Must be a string.
  * @param state - Previous `state` from this function, or null for the first call.
  * @param options - Parse + render options.
- * @throws {StreamdHtmlArgumentError} When `src` is not a string.
+ * @throws {StreamdHtmlArgumentError} When `src` is not a string or a
+ *   deprecated option is passed.
  */
 export function streamHtml(
   src: string,
@@ -64,8 +58,11 @@ export interface ThemeStylesheetOptions {
 
 /**
  * Generate a complete stylesheet for a theme, coupling CSS variables with
- * per-token styling rules. Output targets content produced by `renderHtml`
- * with the matching `classPrefix`.
+ * per-token styling rules.
+ *
+ * @param theme - Theme object to convert to CSS.
+ * @param options - Stylesheet generation options.
+ * @returns CSS string ready to inject into a `<style>` tag.
  */
 export function renderThemeStylesheet(theme: Theme, options: ThemeStylesheetOptions = {}): string {
   const prefix = options.classPrefix ?? "streamd";
@@ -83,26 +80,17 @@ export function renderThemeStylesheet(theme: Theme, options: ThemeStylesheetOpti
   return vars + rules;
 }
 
-/**
- * Width of the blockquote left-border accent in pixels.
- * Chosen to be visually distinct without dominating the content area.
- */
+/** Blockquote left-border accent width in pixels. */
 const BLOCKQUOTE_BORDER_WIDTH_PX = 4;
 
-/**
- * Width of the horizontal-rule top border in pixels.
- * A single-pixel line matches the CommonMark reference rendering.
- */
+/** Horizontal-rule top border width in pixels. */
 const HR_BORDER_WIDTH_PX = 1;
 
-/**
- * Width of the table cell border in pixels.
- * A single-pixel border matches the GFM reference rendering.
- */
+/** Table cell border width in pixels. */
 const TABLE_BORDER_WIDTH_PX = 1;
 
 /**
- * Generates CSS class rules that reference the CSS custom properties for a given prefix.
+ * Generates CSS class rules referencing CSS custom properties.
  *
  * @param prefix - Namespace prefix used in variable and class names.
  * @returns A joined CSS string of all component rules.

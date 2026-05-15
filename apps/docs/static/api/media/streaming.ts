@@ -12,15 +12,15 @@ import { assertString } from "./validation";
 
 /** Result of `streamHtml` — parallels `ParseResult` but for HTML output. */
 export interface StreamHtmlResult {
-  /** Rendered HTML for the full current source. */
+  /** Rendered HTML string for the full current accumulated source. */
   readonly html: string;
-  /** State to pass back on the next call. */
+  /** Opaque parser state to pass back on the next incremental call. */
   readonly state: ParserState;
 }
 
 /** Options combining parse + render options into one call. */
 export interface StreamHtmlOptions extends RenderHtmlOptions {
-  /** Parser options (gfm, math, tables, etc.). */
+  /** Parser options forwarded to `parse()` (gfm, math, tables, etc.). */
   readonly parse?: ParseOptions;
 }
 
@@ -32,7 +32,8 @@ export interface StreamHtmlOptions extends RenderHtmlOptions {
  * @param src - Full accumulated markdown source so far. Must be a string.
  * @param state - Previous `state` from this function, or null for the first call.
  * @param options - Parse + render options.
- * @throws StreamdHtmlArgumentError when `src` is not a string.
+ * @throws {StreamdHtmlArgumentError} When `src` is not a string or a
+ *   deprecated option is passed.
  */
 export function streamHtml(
   src: string,
@@ -40,34 +41,60 @@ export function streamHtml(
   options: StreamHtmlOptions = {},
 ): StreamHtmlResult {
   assertString(src, "streamHtml");
+
   const parsed = parse(src, state, options.parse);
   const html = renderHtml(parsed.tokens, options);
+
   return { html, state: parsed.state };
 }
 
 /** Options for `renderThemeStylesheet`. */
 export interface ThemeStylesheetOptions {
-  /** CSS class prefix that was passed to `renderHtml`. Default: "streamd". */
+  /** CSS class prefix matching the one passed to `renderHtml`. Default: `"streamd"`. */
   readonly classPrefix?: string;
-  /** If provided, wraps generated rules in a `@media (prefers-color-scheme: dark)` block. */
+  /** When true and the theme is "dark", wraps rules in `@media (prefers-color-scheme: dark)`. */
   readonly darkMediaQuery?: boolean;
 }
 
 /**
  * Generate a complete stylesheet for a theme, coupling CSS variables with
- * per-token styling rules. Output targets content produced by `renderHtml`
- * with the matching `classPrefix`.
+ * per-token styling rules.
+ *
+ * @param theme - Theme object to convert to CSS.
+ * @param options - Stylesheet generation options.
+ * @returns CSS string ready to inject into a `<style>` tag.
  */
 export function renderThemeStylesheet(theme: Theme, options: ThemeStylesheetOptions = {}): string {
   const prefix = options.classPrefix ?? "streamd";
   const vars = themeToCss(theme, { prefix, selector: `.${prefix}-root` });
   const rules = themeRules(prefix);
-  if (options.darkMediaQuery === true && theme.name === "dark") {
+
+  const darkMediaQueryRequested = options.darkMediaQuery === true;
+  const themeIsDark = theme.name === "dark";
+  const shouldEmitDarkMediaQuery = darkMediaQueryRequested && themeIsDark;
+
+  if (shouldEmitDarkMediaQuery) {
     return `@media (prefers-color-scheme: dark) {\n${vars}${rules}}\n`;
   }
+
   return vars + rules;
 }
 
+/** Blockquote left-border accent width in pixels. */
+const BLOCKQUOTE_BORDER_WIDTH_PX = 4;
+
+/** Horizontal-rule top border width in pixels. */
+const HR_BORDER_WIDTH_PX = 1;
+
+/** Table cell border width in pixels. */
+const TABLE_BORDER_WIDTH_PX = 1;
+
+/**
+ * Generates CSS class rules referencing CSS custom properties.
+ *
+ * @param prefix - Namespace prefix used in variable and class names.
+ * @returns A joined CSS string of all component rules.
+ */
 function themeRules(prefix: string): string {
   const p = prefix;
   return [
@@ -81,16 +108,16 @@ function themeRules(prefix: string): string {
     `.${p}-root h5, .${p}-h5 { font-size: var(--${p}-heading-5); font-weight: var(--${p}-weight-bold); }`,
     `.${p}-root h6, .${p}-h6 { font-size: var(--${p}-heading-6); font-weight: var(--${p}-weight-bold); }`,
     `.${p}-root p, .${p}-p { margin: var(--${p}-spacing-md) 0; }`,
-    `.${p}-root blockquote, .${p}-blockquote { border-left: 4px solid var(--${p}-color-blockquote-accent); color: var(--${p}-color-text-muted); padding-left: var(--${p}-spacing-md); margin: var(--${p}-spacing-md) 0; }`,
+    `.${p}-root blockquote, .${p}-blockquote { border-left: ${BLOCKQUOTE_BORDER_WIDTH_PX}px solid var(--${p}-color-blockquote-accent); color: var(--${p}-color-text-muted); padding-left: var(--${p}-spacing-md); margin: var(--${p}-spacing-md) 0; }`,
     `.${p}-root code, .${p}-code { background: var(--${p}-color-code-background); border-radius: var(--${p}-radius-sm); padding: 0 var(--${p}-spacing-xs); font-family: var(--${p}-code-font-family); font-size: var(--${p}-font-size-sm); }`,
     `.${p}-root pre, .${p}-pre { background: var(--${p}-color-pre-background); border-radius: var(--${p}-radius-md); padding: var(--${p}-spacing-md); overflow-x: auto; }`,
     `.${p}-root pre code, .${p}-pre .${p}-code { background: transparent; padding: 0; font-size: var(--${p}-font-size-sm); line-height: var(--${p}-code-line-height); }`,
     `.${p}-root strong, .${p}-strong { font-weight: var(--${p}-weight-bold); color: var(--${p}-color-strong); }`,
     `.${p}-root em, .${p}-em { color: var(--${p}-color-emphasis); }`,
     `.${p}-root del, .${p}-del { color: var(--${p}-color-text-muted); }`,
-    `.${p}-root hr, .${p}-hr { border: 0; border-top: 1px solid var(--${p}-color-border); margin: var(--${p}-spacing-lg) 0; }`,
-    `.${p}-root table, .${p}-table { border-collapse: collapse; border: 1px solid var(--${p}-color-border); }`,
-    `.${p}-root th, .${p}-root td { border: 1px solid var(--${p}-color-border); padding: var(--${p}-spacing-xs) var(--${p}-spacing-sm); }`,
+    `.${p}-root hr, .${p}-hr { border: 0; border-top: ${HR_BORDER_WIDTH_PX}px solid var(--${p}-color-border); margin: var(--${p}-spacing-lg) 0; }`,
+    `.${p}-root table, .${p}-table { border-collapse: collapse; border: ${TABLE_BORDER_WIDTH_PX}px solid var(--${p}-color-border); }`,
+    `.${p}-root th, .${p}-root td { border: ${TABLE_BORDER_WIDTH_PX}px solid var(--${p}-color-border); padding: var(--${p}-spacing-xs) var(--${p}-spacing-sm); }`,
     `.${p}-root ul, .${p}-ul, .${p}-root ol, .${p}-ol { padding-left: var(--${p}-spacing-lg); }`,
     `.${p}-root li, .${p}-li { margin: var(--${p}-spacing-xs) 0; }`,
     `.${p}-root img, .${p}-img { max-width: 100%; height: auto; }`,

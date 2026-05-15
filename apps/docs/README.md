@@ -10,7 +10,7 @@ with the TypeDoc-generated API reference shipped under `static/api/`.
 - `docs/packages/*.md` — one reference page per published package:
   `@streamd/parser`, `@streamd/tokens`, `@streamd/html`,
   `@streamd/react`, `@streamd/react-native`, `@streamd/plugins`,
-  `@streamd/plugin-shiki`, `@streamd/plugin-katex`, `@streamd/cli`.
+  `@streamd/plugin-shiki`, `@streamd/cli`.
 - `docs/recipes/*.md` — end-to-end guides: LLM streaming, safe
   pipeline construction, custom themes, component overrides, Shiki
   integration, math rendering, and migration paths from

@@ -3,30 +3,27 @@
  *
  * @module render
  */
-import {
-  type BlockquoteToken,
-  type CodeBlockToken,
-  type CodeSpanToken,
-  type EmToken,
-  type EscapeToken,
-  type HeadingToken,
-  type HtmlBlockToken,
-  type HtmlInlineToken,
-  type ImageToken,
-  type InlineToken,
-  type LinkToken,
-  type ListItemToken,
-  type ListToken,
-  type MathBlockToken,
-  type MathInlineToken,
-  type ParagraphToken,
-  type StrikethroughToken,
-  type StrongToken,
-  type TableToken,
-  type TextToken,
-  type Token,
-  type TokensList,
-  TokenType,
+import type {
+  BlockquoteToken,
+  CodeBlockToken,
+  CodeSpanToken,
+  EmToken,
+  EscapeToken,
+  HeadingToken,
+  ImageToken,
+  InlineToken,
+  LinkToken,
+  ListItemToken,
+  ListToken,
+  MathBlockToken,
+  MathInlineToken,
+  ParagraphToken,
+  StrikethroughToken,
+  StrongToken,
+  TableToken,
+  TextToken,
+  Token,
+  TokensList,
 } from "@streamd/parser";
 import { applyPlugins } from "@streamd/plugins";
 import { lightTheme, type Theme } from "@streamd/tokens";
@@ -37,12 +34,11 @@ import type { Components, RenderReactNativeOptions } from "./types";
 import { assertTokenList, StreamdReactNativeArgumentError } from "./validation";
 
 /**
- * Throws on an unexpected token kind — the token tree is malformed or
- * out of sync with the `@streamd/parser` `TokenType` enum.
+ * Throws on an unexpected token kind.
  *
- * @param token - The offending token; its `.type` is stringified into the message.
- * @param context - The renderer callsite (e.g. `"renderBlock"`).
- * @throws {StreamdReactNativeArgumentError} Always; `kind = "unknown-token-type"`.
+ * @param token - The offending token.
+ * @param context - The renderer callsite.
+ * @throws {StreamdReactNativeArgumentError} Always.
  */
 function unreachableToken(token: Token, context: string): never {
   throw new StreamdReactNativeArgumentError({
@@ -53,27 +49,19 @@ function unreachableToken(token: Token, context: string): never {
 }
 
 /**
- * Fully resolved renderer options used by the internal React Native render
- * pipeline. Produced once by `renderMarkdown()` from the caller's
- * `RenderOptions`; held as a frozen shape for monomorphic access.
- *
- * `components` is `Required<Components>` — every key is guaranteed present
- * because {@link resolveComponents} merges caller overrides on top of the
- * frozen default set, which defines a component for every token kind.
+ * Fully resolved renderer options used by the internal render pipeline.
  */
 interface Resolved {
   /** Complete component map — every token kind has a guaranteed entry. */
   readonly components: Required<Components>;
-  /** Math rendering mode forwarded from caller options. */
+  /** Math rendering mode. */
   readonly math: "span-class" | "tex-delim" | "none";
   /** Task-list checkbox rendering mode. */
   readonly taskListCheckboxes: "disabled" | "none";
-  /** Global link-press handler, or `undefined` when not provided. */
+  /** Global link-press handler. */
   readonly onLinkPress: ((href: string) => void) | undefined;
-  /** Active theme tokens for styling. */
+  /** Active theme tokens. */
   readonly theme: Theme;
-  /** Whether custom code-block overrides may consume plugin-supplied HTML. */
-  readonly allowDangerousMetaHtml: boolean;
 }
 
 /** Cache default components per theme reference. */
@@ -81,10 +69,6 @@ const DEFAULTS_CACHE = new WeakMap<Theme, Required<Components>>();
 
 /**
  * Returns the default component set for a given theme, caching by reference.
- *
- * The returned map defines a component for every key in {@link Components},
- * so the type is narrowed to `Required<Components>` — callers can access
- * any field without a null check.
  *
  * @param theme - The theme to build defaults for.
  * @returns Cached or freshly-built default components.
@@ -98,17 +82,10 @@ function defaultsFor(theme: Theme): Required<Components> {
 }
 
 /**
- * Merge caller-supplied component overrides on top of the frozen default
- * set and return a `Required<Components>`.
+ * Merge caller-supplied component overrides on top of the default set.
  *
- * The `as Required<Components>` cast is sound because `defaults` already
- * supplies a component for every key, and the spread only ever overrides
- * them with caller-supplied concrete components (never with `undefined`
- * under `exactOptionalPropertyTypes`). All consumer code can then access
- * `components.X` without a null assertion.
- *
- * @param defaults - Frozen default component map — complete by construction.
- * @param custom - Optional caller overrides; any key omitted keeps the default.
+ * @param defaults - Frozen default component map.
+ * @param custom - Optional caller overrides.
  * @returns Merged component map with every field guaranteed present.
  */
 function resolveComponents(
@@ -122,9 +99,8 @@ function resolveComponents(
 /**
  * Render a token tree to React Native nodes.
  *
- * @param tokens - Token list from `parse()`. Must be an array — any other
- *   type throws `StreamdReactNativeArgumentError`.
- * @param options - Optional overrides. `theme` defaults to lightTheme.
+ * @param tokens - Token list from `parse()`.
+ * @param options - Optional overrides.
  * @throws StreamdReactNativeArgumentError when `tokens` is not an array.
  */
 export function renderReactNative(
@@ -140,7 +116,6 @@ export function renderReactNative(
     taskListCheckboxes: options.taskListCheckboxes ?? "disabled",
     onLinkPress: options.onLinkPress,
     theme,
-    allowDangerousMetaHtml: options.allowDangerousMetaHtml === true,
   };
   const effective =
     options.plugins && options.plugins.length > 0
@@ -155,8 +130,8 @@ export function renderReactNative(
  *
  * @param tokens - Block tokens to render.
  * @param resolved - Resolved rendering configuration.
- * @param keyPrefix - Prefix for React keys to ensure uniqueness.
- * @returns Array of rendered React nodes, one per token.
+ * @param keyPrefix - Prefix for React keys.
+ * @returns Array of rendered React nodes.
  */
 function renderBlocks(
   tokens: ReadonlyArray<Token>,
@@ -180,27 +155,25 @@ function renderBlocks(
  */
 function renderBlock(token: Token, resolved: Resolved, key: string): ReactNode {
   switch (token.type) {
-    case TokenType.Blockquote:
+    case "blockquote":
       return renderBlockquote(token, resolved, key);
-    case TokenType.List:
+    case "list":
       return renderList(token, resolved, key);
-    case TokenType.ListItem:
+    case "list_item":
       return renderListItem(token, resolved, false, 0, 1, key);
-    case TokenType.Heading:
+    case "heading":
       return renderHeading(token, resolved, key);
-    case TokenType.Paragraph:
+    case "paragraph":
       return renderParagraph(token, resolved, key);
-    case TokenType.CodeBlock:
+    case "code_block":
       return renderCodeBlock(token, resolved, key);
-    case TokenType.HtmlBlock:
-      return renderHtmlBlock(token, resolved, key);
-    case TokenType.Hr:
+    case "hr":
       return renderHr(resolved, key);
-    case TokenType.Space:
+    case "space":
       return null;
-    case TokenType.Table:
+    case "table":
       return renderTable(token, resolved, key);
-    case TokenType.MathBlock:
+    case "math_block":
       return renderMathBlock(token, resolved, key);
     default:
       return unreachableToken(token, "renderBlock");
@@ -210,9 +183,9 @@ function renderBlock(token: Token, resolved: Resolved, key: string): ReactNode {
 /**
  * Renders a blockquote token with its nested children.
  *
- * @param token - The blockquote token containing child blocks.
+ * @param token - The blockquote token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node wrapping the blockquote content.
  */
 function renderBlockquote(token: BlockquoteToken, resolved: Resolved, key: string): ReactNode {
@@ -221,11 +194,11 @@ function renderBlockquote(token: BlockquoteToken, resolved: Resolved, key: strin
 }
 
 /**
- * Renders an ordered or unordered list token with all its items.
+ * Renders a list token with all its items.
  *
- * @param token - The list token containing child list items.
+ * @param token - The list token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node representing the full list.
  */
 function renderList(token: ListToken, resolved: Resolved, key: string): ReactNode {
@@ -249,14 +222,14 @@ function renderList(token: ListToken, resolved: Resolved, key: string): ReactNod
 }
 
 /**
- * Renders a single list item with its position and checked state.
+ * Renders a single list item.
  *
- * @param token - The list item token containing child blocks.
+ * @param token - The list item token.
  * @param resolved - Resolved rendering configuration.
  * @param ordered - Whether the parent list is ordered.
- * @param index - Zero-based index of this item within the list.
+ * @param index - Zero-based index.
  * @param start - Starting number for ordered lists.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node representing the list item.
  */
 function renderListItem(
@@ -267,7 +240,7 @@ function renderListItem(
   start: number,
   key: string,
 ): ReactNode {
-  const Component = resolved.components.listItem;
+  const Component = resolved.components.list_item;
   return createElement(
     Component,
     { key, index, ordered, start, checked: token.checked },
@@ -276,11 +249,11 @@ function renderListItem(
 }
 
 /**
- * Renders a heading token at the specified level with inline children.
+ * Renders a heading token.
  *
- * @param token - The heading token with level and inline children.
+ * @param token - The heading token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node representing the heading.
  */
 function renderHeading(token: HeadingToken, resolved: Resolved, key: string): ReactNode {
@@ -293,11 +266,11 @@ function renderHeading(token: HeadingToken, resolved: Resolved, key: string): Re
 }
 
 /**
- * Renders a paragraph token with its inline children.
+ * Renders a paragraph token.
  *
- * @param token - The paragraph token containing inline tokens.
+ * @param token - The paragraph token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node representing the paragraph.
  */
 function renderParagraph(token: ParagraphToken, resolved: Resolved, key: string): ReactNode {
@@ -306,73 +279,27 @@ function renderParagraph(token: ParagraphToken, resolved: Resolved, key: string)
 }
 
 /**
- * Props passed to the code-block component during rendering.
- * Extracted from the inline type to satisfy type-centralization rules.
- */
-interface CodeBlockRenderProps {
-  /** React key for the rendered element. */
-  readonly key: string;
-  /** Language identifier from the info string. */
-  readonly lang: string;
-  /** Full info string after the opening fence. */
-  readonly info: string;
-  /** Raw code content without fences. */
-  readonly content: string;
-  /** Pre-rendered HTML from a highlight plugin, if present. */
-  readonly html?: string;
-  /** Whether the component may consume `html`. */
-  readonly allowDangerousMetaHtml: boolean;
-}
-
-/**
- * Renders a fenced or indented code block with language and info metadata.
+ * Renders a code block with optional structured highlight data.
  *
- * @param token - The code block token with lang, info, and content.
+ * @param token - The code block token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node representing the code block.
  */
 function renderCodeBlock(token: CodeBlockToken, resolved: Resolved, key: string): ReactNode {
-  const Component = resolved.components.codeBlock;
-  const htmlValue = token.meta?.html;
-  const props: CodeBlockRenderProps =
-    htmlValue === undefined
-      ? {
-          key,
-          lang: token.lang,
-          info: token.info,
-          content: token.content,
-          allowDangerousMetaHtml: resolved.allowDangerousMetaHtml,
-        }
-      : {
-          key,
-          lang: token.lang,
-          info: token.info,
-          content: token.content,
-          html: htmlValue,
-          allowDangerousMetaHtml: resolved.allowDangerousMetaHtml,
-        };
+  const Component = resolved.components.code_block;
+  const highlight = token.meta?.highlight;
+  const props = highlight
+    ? { key, lang: token.lang, content: token.content, highlight }
+    : { key, lang: token.lang, content: token.content };
   return createElement(Component, props);
 }
 
 /**
- * Renders a raw HTML block token as a passthrough component.
- *
- * @param token - The HTML block token with raw content.
- * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
- * @returns A React node representing the HTML block.
- */
-function renderHtmlBlock(token: HtmlBlockToken, resolved: Resolved, key: string): ReactNode {
-  const Component = resolved.components.htmlBlock;
-  return createElement(Component, { key, content: token.content });
-}
-
-/**
- * Renders a horizontal rule (thematic break) element.
+ * Renders a horizontal rule.
  *
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node representing the horizontal rule.
  */
 function renderHr(resolved: Resolved, key: string): ReactNode {
@@ -381,11 +308,11 @@ function renderHr(resolved: Resolved, key: string): ReactNode {
 }
 
 /**
- * Renders a table token with header cells, body rows, and column alignment.
+ * Renders a table token.
  *
- * @param token - The table token with head, rows, and align arrays.
+ * @param token - The table token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node representing the table.
  */
 function renderTable(token: TableToken, resolved: Resolved, key: string): ReactNode {
@@ -407,26 +334,26 @@ function renderTable(token: TableToken, resolved: Resolved, key: string): ReactN
 }
 
 /**
- * Renders a display-math block based on the configured math mode.
+ * Renders a display-math block.
  *
- * @param token - The math block token with TeX content.
+ * @param token - The math block token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
- * @returns A React node, a TeX-delimited string, or null when math is disabled.
+ * @param key - React key.
+ * @returns A React node, TeX-delimited string, or null.
  */
 function renderMathBlock(token: MathBlockToken, resolved: Resolved, key: string): ReactNode {
   if (resolved.math === "none") return null;
   if (resolved.math === "tex-delim") return `$$\n${token.content}$$\n`;
-  const Component = resolved.components.mathBlock;
+  const Component = resolved.components.math_block;
   return createElement(Component, { key, content: token.content });
 }
 
 /**
- * Renders an array of inline tokens into a Fragment of React Native nodes.
+ * Renders an array of inline tokens into a Fragment.
  *
  * @param tokens - Inline tokens to render.
  * @param resolved - Resolved rendering configuration.
- * @param keyPrefix - Prefix for React keys to ensure uniqueness.
+ * @param keyPrefix - Prefix for React keys.
  * @returns A Fragment wrapping all inline nodes, or null when empty.
  */
 function renderInlines(
@@ -447,34 +374,30 @@ function renderInlines(
  *
  * @param token - The inline token to render.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node or throws on unknown inline types.
  */
 function renderInline(token: InlineToken, resolved: Resolved, key: string): ReactNode {
   switch (token.type) {
-    case TokenType.Text:
+    case "text":
       return renderText(token, resolved, key);
-    case TokenType.Softbreak:
-      return renderSoftbreak(resolved, key);
-    case TokenType.Hardbreak:
+    case "hardbreak":
       return renderHardbreak(resolved, key);
-    case TokenType.CodeSpan:
+    case "code_span":
       return renderCodeSpan(token, resolved, key);
-    case TokenType.Em:
+    case "em":
       return renderEm(token, resolved, key);
-    case TokenType.Strong:
+    case "strong":
       return renderStrong(token, resolved, key);
-    case TokenType.Strikethrough:
+    case "strikethrough":
       return renderStrikethrough(token, resolved, key);
-    case TokenType.Link:
+    case "link":
       return renderLink(token, resolved, key);
-    case TokenType.Image:
+    case "image":
       return renderImage(token, resolved, key);
-    case TokenType.HtmlInline:
-      return renderHtmlInline(token, resolved, key);
-    case TokenType.Escape:
+    case "escape":
       return renderEscape(token, resolved, key);
-    case TokenType.MathInline:
+    case "math_inline":
       return renderMathInline(token, resolved, key);
     default:
       return unreachableToken(token, "renderInline");
@@ -484,9 +407,9 @@ function renderInline(token: InlineToken, resolved: Resolved, key: string): Reac
 /**
  * Renders a plain text token.
  *
- * @param token - The text token with string content.
+ * @param token - The text token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node displaying the text content.
  */
 function renderText(token: TextToken, resolved: Resolved, key: string): ReactNode {
@@ -495,22 +418,10 @@ function renderText(token: TextToken, resolved: Resolved, key: string): ReactNod
 }
 
 /**
- * Renders a soft line break (typically collapsed to a space).
+ * Renders a hard line break.
  *
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
- * @returns A React node representing the soft break.
- */
-function renderSoftbreak(resolved: Resolved, key: string): ReactNode {
-  const Component = resolved.components.softbreak;
-  return createElement(Component, { key });
-}
-
-/**
- * Renders a hard line break (forced newline).
- *
- * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node representing the hard break.
  */
 function renderHardbreak(resolved: Resolved, key: string): ReactNode {
@@ -521,22 +432,22 @@ function renderHardbreak(resolved: Resolved, key: string): ReactNode {
 /**
  * Renders an inline code span.
  *
- * @param token - The code span token with text content.
+ * @param token - The code span token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node representing the inline code.
  */
 function renderCodeSpan(token: CodeSpanToken, resolved: Resolved, key: string): ReactNode {
-  const Component = resolved.components.codeSpan;
+  const Component = resolved.components.code_span;
   return createElement(Component, { key, content: token.content });
 }
 
 /**
- * Renders an emphasis (italic) span with inline children.
+ * Renders an emphasis span.
  *
- * @param token - The emphasis token containing inline children.
+ * @param token - The emphasis token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node wrapping the emphasized content.
  */
 function renderEm(token: EmToken, resolved: Resolved, key: string): ReactNode {
@@ -545,11 +456,11 @@ function renderEm(token: EmToken, resolved: Resolved, key: string): ReactNode {
 }
 
 /**
- * Renders a strong (bold) span with inline children.
+ * Renders a strong span.
  *
- * @param token - The strong token containing inline children.
+ * @param token - The strong token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node wrapping the bold content.
  */
 function renderStrong(token: StrongToken, resolved: Resolved, key: string): ReactNode {
@@ -558,11 +469,11 @@ function renderStrong(token: StrongToken, resolved: Resolved, key: string): Reac
 }
 
 /**
- * Renders a strikethrough span with inline children.
+ * Renders a strikethrough span.
  *
- * @param token - The strikethrough token containing inline children.
+ * @param token - The strikethrough token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node wrapping the struck-through content.
  */
 function renderStrikethrough(
@@ -575,11 +486,11 @@ function renderStrikethrough(
 }
 
 /**
- * Renders a hyperlink with optional onPress handler and inline children.
+ * Renders a hyperlink.
  *
- * @param token - The link token with href, title, and inline children.
+ * @param token - The link token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node representing the link.
  */
 function renderLink(token: LinkToken, resolved: Resolved, key: string): ReactNode {
@@ -591,11 +502,11 @@ function renderLink(token: LinkToken, resolved: Resolved, key: string): ReactNod
 }
 
 /**
- * Renders an image element with src, alt text, and optional title.
+ * Renders an image element.
  *
- * @param token - The image token with src, alt, and title.
+ * @param token - The image token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node representing the image.
  */
 function renderImage(token: ImageToken, resolved: Resolved, key: string): ReactNode {
@@ -604,24 +515,11 @@ function renderImage(token: ImageToken, resolved: Resolved, key: string): ReactN
 }
 
 /**
- * Renders an inline raw HTML fragment as a passthrough component.
- *
- * @param token - The inline HTML token with raw content.
- * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
- * @returns A React node representing the inline HTML.
- */
-function renderHtmlInline(token: HtmlInlineToken, resolved: Resolved, key: string): ReactNode {
-  const Component = resolved.components.htmlInline;
-  return createElement(Component, { key, content: token.content });
-}
-
-/**
  * Renders a backslash-escaped character.
  *
- * @param token - The escape token with the escaped character content.
+ * @param token - The escape token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
+ * @param key - React key.
  * @returns A React node displaying the escaped character.
  */
 function renderEscape(token: EscapeToken, resolved: Resolved, key: string): ReactNode {
@@ -630,16 +528,16 @@ function renderEscape(token: EscapeToken, resolved: Resolved, key: string): Reac
 }
 
 /**
- * Renders an inline math expression based on the configured math mode.
+ * Renders an inline math expression.
  *
- * @param token - The inline math token with TeX content.
+ * @param token - The inline math token.
  * @param resolved - Resolved rendering configuration.
- * @param key - React key for the rendered element.
- * @returns A React node, a TeX-delimited string, or null when math is disabled.
+ * @param key - React key.
+ * @returns A React node, TeX-delimited string, or null.
  */
 function renderMathInline(token: MathInlineToken, resolved: Resolved, key: string): ReactNode {
   if (resolved.math === "none") return null;
   if (resolved.math === "tex-delim") return `$${token.content}$`;
-  const Component = resolved.components.mathInline;
+  const Component = resolved.components.math_inline;
   return createElement(Component, { key, content: token.content });
 }

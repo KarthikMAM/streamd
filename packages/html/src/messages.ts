@@ -16,17 +16,6 @@
  * Each key is an error kind (matching `StreamdHtmlArgumentErrorFields.kind`)
  * and each value is a factory function that accepts contextual parameters
  * and returns a fully-formed, human-readable error message string.
- *
- * Centralising messages here means:
- * - Tests can assert stable messages without fragile substring matching.
- * - Localization (if ever needed) becomes a single-file change.
- * - Logs contain grep-able stable phrases.
- *
- * @example
- * ```ts
- * htmlErrorMessage.tokensNotArray("renderHtml", "number");
- * // → "renderHtml: expected tokens to be an Array, received number"
- * ```
  */
 export const htmlErrorMessage = {
   /**

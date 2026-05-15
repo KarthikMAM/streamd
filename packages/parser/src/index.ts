@@ -18,7 +18,7 @@ export type { BlockTypeValue } from "./types/block-type";
 export { BlockType } from "./types/block-type";
 /** Parse options, result shape, and opaque streaming state types. */
 export type { ParseOptions, ParseResult, ParserState } from "./types/options";
-/** Token type value type (numeric literal union). */
+/** Token type value type (string literal union). */
 export type { TokenTypeValue } from "./types/token-type";
 /** Token type enum-like constant object. */
 export { TokenType } from "./types/token-type";
@@ -33,9 +33,8 @@ export type {
   EscapeToken,
   HardbreakToken,
   HeadingToken,
+  HighlightData,
   HrToken,
-  HtmlBlockToken,
-  HtmlInlineToken,
   ImageToken,
   InlineToken,
   LinkToken,
@@ -44,12 +43,12 @@ export type {
   MathBlockToken,
   MathInlineToken,
   ParagraphToken,
-  SoftbreakToken,
   SpaceToken,
   StrikethroughToken,
   StrongToken,
   TableToken,
   TextToken,
+  ThemedSegment,
   Token,
   TokenMeta,
   TokensList,

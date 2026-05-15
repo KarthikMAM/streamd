@@ -44,6 +44,6 @@ describe("@streamd/parser — public type contract", () => {
 
   it("TOKEN_SCHEMA_VERSION is the matching TokenSchemaVersion literal", () => {
     expectTypeOf(TOKEN_SCHEMA_VERSION).toEqualTypeOf<TokenSchemaVersion>();
-    expectTypeOf<TokenSchemaVersion>().toEqualTypeOf<1>();
+    expectTypeOf<TokenSchemaVersion>().toEqualTypeOf<2>();
   });
 });

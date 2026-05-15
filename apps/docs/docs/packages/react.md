@@ -127,12 +127,14 @@ ordering rules.
 
 - For untrusted input, always include
   [`sanitize()`](./plugins#sanitize) as the **last** plugin.
-- `meta.html` produced by plugins (`@streamd/plugin-shiki`,
-  `@streamd/plugin-katex`) is **ignored by default**. Opt in via
-  `allowDangerousMetaHtml: true` on the renderer options. That flag
-  trusts every plugin currently in the pipeline — see the
-  [Shiki integration recipe](../recipes/shiki-integration) for the
-  combinations that work with `sanitize()`.
+- `meta.html` produced by plugins (`@streamd/plugin-shiki`) is
+  **ignored by default**. Opt in via `allowDangerousMetaHtml: true`
+  on the renderer options. That flag trusts every plugin currently in
+  the pipeline — see the [Shiki integration recipe](../recipes/shiki-integration)
+  for the combinations that work with `sanitize()`.
+- Math rendering is a component-layer concern — supply
+  `components.math_block` / `components.math_inline` overrides. See
+  the [math rendering](../recipes/math-rendering) recipe.
 - `renderReact` throws `StreamdReactArgumentError` (a `TypeError`
   subclass) when `tokens` is not an array.
 

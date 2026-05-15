@@ -36,7 +36,6 @@ function makeOptions(overrides: Partial<CliOptions> = {}): CliOptions {
     anchors: false,
     linkAttrs: false,
     sanitize: true,
-    allowDangerousMetaHtml: false,
     stream: "auto",
     wrapRoot: false,
     xhtml: true,
@@ -101,14 +100,11 @@ describe("buildPlugins", () => {
 });
 
 describe("buildStreamOptions", () => {
-  it("forwards parse, plugins, xhtml, wrapRoot, allowDangerousMetaHtml", () => {
-    const out = buildStreamOptions(
-      makeOptions({ gfm: true, xhtml: false, wrapRoot: true, allowDangerousMetaHtml: true }),
-    );
+  it("forwards parse, plugins, xhtml, wrapRoot", () => {
+    const out = buildStreamOptions(makeOptions({ gfm: true, xhtml: false, wrapRoot: true }));
     expect(out.parse).toEqual({ gfm: true, math: false });
     expect(out.xhtml).toBe(false);
     expect(out.wrapRoot).toBe(true);
-    expect(out.allowDangerousMetaHtml).toBe(true);
     // Default CLI has sanitize=true → plugins contains exactly [sanitize].
     expect(out.plugins?.map((p) => p.name)).toEqual(["sanitize"]);
   });

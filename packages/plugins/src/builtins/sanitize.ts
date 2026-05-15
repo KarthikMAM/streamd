@@ -1,42 +1,28 @@
 /**
- * `sanitize` — removes raw HTML tokens and dangerous token-meta for safe
- * rendering of untrusted markdown.
+ * `sanitize` — rewrites unsafe link/image targets and filters dangerous
+ * `meta.attrs` for safe rendering of untrusted markdown.
  *
- * ## Three layers of defense
+ * ## Two layers of defense
  *
- * 1. **Drop raw HTML tokens.** `HtmlBlock` and `HtmlInline` tokens emit
- *    their content verbatim in the renderer, so they are removed from
- *    the tree unless `allowRawHtml: true` is set.
+ * 1. **Rewrite unsafe link and image targets.** `Link.href` / `Image.src`
+ *    values whose scheme is outside `allowedProtocols` are replaced with
+ *    `unsafeHrefFallback` (default `"#"`) or stripped entirely (when
+ *    `unsafeHrefFallback: null`).
  *
- * 2. **Rewrite unsafe link and image targets.** `Link.href` / `Image.src`
- *    values whose scheme is outside `allowedProtocols` are either
- *    replaced with `unsafeHrefFallback` (default `"#"`) or stripped
- *    entirely (when `unsafeHrefFallback: null`).
+ * 2. **Filter token-meta attributes.** Plugins can annotate any token with
+ *    `meta.attrs` (arbitrary attribute injection). Sanitize walks **every**
+ *    token and filters `meta.attrs` keys against the canonical
+ *    `isSafeAttributeName` allowlist shared with the HTML renderer
+ *    (`class`, `id`, `title`, `alt`, `lang`, `dir`, `role`, `href`,
+ *    `src`, `data-*`, `aria-*`). Keys outside the allowlist are removed
+ *    silently.
  *
- * 3. **Final-pass token-meta sanitization.** Plugins can annotate any
- *    token with `meta.html` (a pre-rendered string emitted verbatim
- *    by the renderer) and `meta.attrs` (arbitrary attribute injection).
- *    Sanitize walks **every** token and:
- *      - Strips `meta.html` when `allowRawHtml` is false — otherwise a
- *        preceding plugin (e.g. a custom syntax-highlighter that
- *        produces raw HTML) could smuggle markup past the HtmlBlock /
- *        HtmlInline gate.
- *      - Filters `meta.attrs` keys against the canonical
- *        `isSafeAttributeName` allowlist shared with the HTML renderer
- *        (`class`, `id`, `title`, `alt`, `lang`, `dir`, `role`, `href`,
- *        `src`, `data-*`, `aria-*`). Keys outside the allowlist are
- *        removed silently — e.g. an `onclick` or `formaction` injected
- *        via `meta.attrs` never reaches the renderer.
+ * Pipeline placement: `sanitize()` may appear at any position in the
+ * plugin pipeline. With no HTML tokens in parser schema 2, plugins are
+ * fully order-agnostic from a safety perspective.
  *
- * Pipeline placement: **`sanitize()` must be the LAST plugin** in the
- * list. `applyPlugins` enforces this at load time by throwing
- * `StreamdPluginAbiError` with kind `"sanitize-not-last"` when any
- * plugin appears after one named `"sanitize"`.
- *
- * Default configuration is deliberately strict:
- *  - drop all `HtmlBlock` and `HtmlInline` tokens
+ * Default configuration:
  *  - allow only `http:`, `https:`, `mailto:`, `tel:`, `ftp:` schemes
- *  - strip `meta.html` on every token
  *  - filter `meta.attrs` to the canonical safe allowlist
  *
  * @module builtins/sanitize
@@ -73,8 +59,6 @@ const CC_DOT = 46;
 
 /** Options for `sanitize`. */
 export interface SanitizeOptions {
-  /** Allow raw HTML blocks and inline HTML tokens. Default: false. */
-  readonly allowRawHtml?: boolean;
   /** Allowed schemes for link hrefs and image srcs. Case-insensitive. */
   readonly allowedProtocols?: ReadonlyArray<string>;
   /**
@@ -86,8 +70,6 @@ export interface SanitizeOptions {
 
 /** Internal normalized options. */
 interface ResolvedOptions {
-  /** Whether raw HTML tokens are preserved (true) or dropped (false). */
-  readonly allowRawHtml: boolean;
   /** Lowercased, colon-terminated scheme list for safe-protocol checks. */
   readonly allowedProtocols: ReadonlyArray<string>;
   /** Replacement href for unsafe links, or null to strip the link entirely. */
@@ -143,12 +125,10 @@ function normalizeOneProtocol(protocol: string): string {
  * Create a `sanitize` plugin instance.
  *
  * @param options - Allow-list and fallback behaviour. All optional.
- * @returns Plugin that drops raw HTML (by default), rewrites unsafe links,
- *   strips `meta.html`, and filters `meta.attrs`.
+ * @returns Plugin that rewrites unsafe links, and filters `meta.attrs`.
  */
 export function sanitize(options: SanitizeOptions = {}): Plugin {
   const resolved: ResolvedOptions = {
-    allowRawHtml: options.allowRawHtml === true,
     allowedProtocols: normalizeProtocols(options.allowedProtocols ?? DEFAULT_PROTOCOLS),
     fallback:
       options.unsafeHrefFallback === undefined
@@ -173,32 +153,28 @@ export function sanitize(options: SanitizeOptions = {}): Plugin {
 }
 
 /**
- * Handle block-level sanitization — drops raw HTML blocks and cleans meta.
+ * Handle block-level sanitization — cleans meta.attrs on every block token.
  *
  * @param token - Block token to sanitize.
- * @param opts - Resolved sanitization options.
- * @returns `null` to drop, replacement token, or `undefined` to keep unchanged.
+ * @param _opts - Resolved sanitization options (unused for blocks currently).
+ * @returns Replacement token, or `undefined` to keep unchanged.
  */
-function sanitizeBlock(token: Token, opts: ResolvedOptions): Token | null | undefined {
-  if (!opts.allowRawHtml && token.type === TokenType.HtmlBlock) return null;
-
-  const cleaned = cleanTokenMeta(token, opts);
+function sanitizeBlock(token: Token, _opts: ResolvedOptions): Token | null | undefined {
+  const cleaned = cleanTokenMeta(token);
   return cleaned === token ? undefined : cleaned;
 }
 
 /**
- * Handle inline sanitization — dispatches by token type then cleans meta.
+ * Handle inline sanitization — rewrites unsafe links/images then cleans meta.
  *
  * @param token - Inline token to sanitize.
  * @param opts - Resolved sanitization options.
  * @returns `null` to drop, replacement token, or `undefined` to keep unchanged.
  */
 function sanitizeInline(token: InlineToken, opts: ResolvedOptions): InlineToken | null | undefined {
-  if (!opts.allowRawHtml && token.type === TokenType.HtmlInline) return null;
-
   const replaced = replaceUnsafeLinkOrImage(token, opts);
   const next = replaced ?? token;
-  const cleaned = cleanTokenMeta(next, opts);
+  const cleaned = cleanTokenMeta(next);
 
   if (cleaned !== next) return cleaned;
   return replaced;
@@ -248,26 +224,20 @@ function sanitizeImage(image: ImageToken, opts: ResolvedOptions): InlineToken | 
 }
 
 /**
- * Return a cleaned copy of `token` if its `meta` carries unsafe values,
+ * Return a cleaned copy of `token` if its `meta.attrs` carries unsafe keys,
  * otherwise the original token by reference.
  *
- * Unsafe values: `meta.html` when `allowRawHtml` is false, and any key
- * in `meta.attrs` failing `isSafeAttributeName`.
- *
  * @param token - Token whose meta to clean.
- * @param opts - Resolved sanitization options.
  * @returns Cleaned token or the original by reference when unchanged.
  */
-function cleanTokenMeta<T extends Token | InlineToken>(token: T, opts: ResolvedOptions): T {
+function cleanTokenMeta<T extends Token | InlineToken>(token: T): T {
   const meta = token.meta;
   if (meta === undefined) return token;
 
   const filteredAttrs = filterSafeAttrs(meta.attrs);
-  const stripHtml = !opts.allowRawHtml && meta.html !== undefined;
-  const attrsChanged = filteredAttrs !== meta.attrs;
+  if (filteredAttrs === meta.attrs) return token;
 
-  if (!stripHtml && !attrsChanged) return token;
-  return { ...token, meta: buildCleanMeta(meta, stripHtml, filteredAttrs) };
+  return { ...token, meta: buildCleanMeta(meta, filteredAttrs) };
 }
 
 /**
@@ -294,26 +264,21 @@ function filterSafeAttrs(
 }
 
 /**
- * Build a new `TokenMeta` with `html` possibly stripped and `attrs`
- * replaced by the filtered version.
+ * Build a new `TokenMeta` with `attrs` replaced by the filtered version.
  *
  * @param meta - Original meta object.
- * @param stripHtml - Whether to remove the `html` field.
  * @param attrs - Filtered attrs to use (may be undefined to remove).
- * @returns New meta object with unsafe fields removed.
+ * @returns New meta object with unsafe attrs removed.
  */
 function buildCleanMeta(
   meta: TokenMeta,
-  stripHtml: boolean,
   attrs: Readonly<Record<string, string>> | undefined,
 ): TokenMeta {
   const next: Record<string, unknown> = { ...meta };
 
-  if (stripHtml) delete next["html"];
-
   if (attrs === undefined) {
     delete next["attrs"];
-  } else if (attrs !== meta.attrs) {
+  } else {
     next["attrs"] = attrs;
   }
 

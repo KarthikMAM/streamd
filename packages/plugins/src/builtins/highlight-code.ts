@@ -1,15 +1,16 @@
 /**
  * `highlightCode` — runs each fenced code block through a user-supplied
- * highlighter. The plugin stores the pre-rendered HTML on the token's
- * `meta.html` field; renderers that support it will emit the HTML verbatim.
+ * highlighter. The plugin stores structured `HighlightData` on the token's
+ * `meta.highlight` field; renderers emit styled spans from this data.
  *
- * If `highlight` returns `null` or an empty string, the token is left
+ * If `highlight` returns `null` or `undefined`, the token is left
  * unchanged and the default code-block rendering is used.
  *
  * @module builtins/highlight-code
  */
 import {
   type CodeBlockToken,
+  type HighlightData,
   TOKEN_SCHEMA_VERSION,
   type Token,
   type TokensList,
@@ -22,9 +23,9 @@ import type { Plugin } from "../types";
  *
  * @param code - Raw code block content including any trailing newline.
  * @param lang - Language string (first word of the info fence). May be empty.
- * @returns Pre-rendered HTML, or null / empty to skip this block.
+ * @returns Structured highlight data, or null/undefined to skip this block.
  */
-export type HighlightFn = (code: string, lang: string) => string | null | undefined;
+export type HighlightFn = (code: string, lang: string) => HighlightData | null | undefined;
 
 /** Options for `highlightCode`. */
 export interface HighlightCodeOptions {
@@ -46,7 +47,7 @@ interface ResolvedOptions {
  * Create a `highlightCode` plugin instance.
  *
  * @param options - Highlighter and inclusion flag.
- * @returns Plugin that sets `meta.html` on qualifying code blocks.
+ * @returns Plugin that sets `meta.highlight` on qualifying code blocks.
  */
 export function highlightCode(options: HighlightCodeOptions): Plugin {
   const resolved: ResolvedOptions = {
@@ -64,8 +65,9 @@ export function highlightCode(options: HighlightCodeOptions): Plugin {
 }
 
 /**
- * Walk top-level blocks and annotate each qualifying code block with the
- * highlighter's HTML. Returns the input array unchanged when nothing matched.
+ * Walk top-level blocks and annotate each qualifying code block with
+ * structured highlight data. Returns the input array unchanged when
+ * nothing matched.
  *
  * @param tokens - Token list to walk.
  * @param opts - Resolved highlight options.
@@ -86,7 +88,7 @@ function transformBlocks(tokens: TokensList, opts: ResolvedOptions): TokensList 
 }
 
 /**
- * If `token` is a qualifying code block, return a copy with `meta.html`
+ * If `token` is a qualifying code block, return a copy with `meta.highlight`
  * populated. Otherwise return the token unchanged.
  *
  * @param token - Token to potentially annotate.
@@ -98,12 +100,11 @@ function annotateCodeBlock(token: Token, opts: ResolvedOptions): Token {
 
   const code = token as CodeBlockToken;
   const hasNoLang = code.lang.length === 0;
-  const isUnknownLangAndIgnored = hasNoLang && !opts.includeUnknown;
-  if (isUnknownLangAndIgnored) return code;
-  if (code.meta?.html !== undefined) return code;
+  if (hasNoLang && !opts.includeUnknown) return code;
+  if (code.meta?.highlight !== undefined) return code;
 
-  const html = opts.highlight(code.content, code.lang);
-  if (!html) return code;
+  const data = opts.highlight(code.content, code.lang);
+  if (!data) return code;
 
-  return { ...code, meta: { ...(code.meta ?? {}), html } };
+  return { ...code, meta: { ...(code.meta ?? {}), highlight: data } };
 }

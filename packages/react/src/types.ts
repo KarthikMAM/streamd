@@ -9,8 +9,7 @@ import type {
   CodeBlockToken,
   CodeSpanToken,
   HeadingToken,
-  HtmlBlockToken,
-  HtmlInlineToken,
+  HighlightData,
   ImageToken,
   InlineToken,
   LinkToken,
@@ -21,8 +20,11 @@ import type {
   ParagraphToken,
   TableToken,
   TextToken,
+  ThemedSegment,
   Token,
+  TokenMeta,
   TokensList,
+  TokenTypeValue,
 } from "@streamd/parser";
 import type { Plugin } from "@streamd/plugins";
 import type { Theme } from "@streamd/tokens";
@@ -62,30 +64,12 @@ export interface ListItemProps extends BaseProps {
 
 /** Code block props. */
 export interface CodeBlockProps {
+  /** Language identifier from the info string. */
   readonly lang: string;
-  readonly info: string;
+  /** Raw code content. */
   readonly content: string;
-  /** Pre-rendered HTML from a highlight plugin. When set, renderers emit
-   *  this directly instead of the default `<pre><code>` shell.
-   *
-   *  Only consumed by the default component when
-   *  {@link CodeBlockProps.allowDangerousMetaHtml} is explicitly `true`;
-   *  ignored otherwise. Custom `codeBlock` overrides are free to consume
-   *  this at their own discretion.
-   */
-  readonly html?: string;
-  /**
-   * Opt-in flag that authorises the default `codeBlock` component to
-   * render plugin-supplied HTML via `dangerouslySetInnerHTML`.
-   *
-   * **Security** — leave unset / `false` (the default). Only flip to
-   * `true` when every plugin in the pipeline is trusted to produce
-   * safe HTML (for example, a hand-wired Shiki / Prism integration
-   * owned by your team). Consuming arbitrary plugin HTML is an XSS
-   * sink equivalent to interpolating raw strings into
-   * `innerHTML`.
-   */
-  readonly allowDangerousMetaHtml?: boolean;
+  /** Structured highlight data from plugin-shiki, if present. */
+  readonly highlight?: HighlightData;
 }
 
 /** Code span props. */
@@ -116,17 +100,13 @@ export interface ImageProps {
   readonly alt: string;
   /** Title attribute text. Empty string when no title was specified. */
   readonly title: string;
+  /** Additional attributes from meta.attrs. */
+  readonly attrs?: Readonly<Record<string, string>>;
 }
 
-/** Math props. */
+/** Math props (block or inline). */
 export interface MathProps {
   /** Raw TeX/LaTeX content between delimiters. */
-  readonly content: string;
-}
-
-/** Raw HTML props (block or inline). */
-export interface HtmlProps {
-  /** Verbatim HTML string from the source document. */
   readonly content: string;
 }
 
@@ -140,58 +120,32 @@ export interface TableProps {
   readonly rows: ReadonlyArray<ReadonlyArray<ReactNode>>;
 }
 
-/** Complete component override map. Any key omitted falls back to the default. */
-export interface Components {
-  /** Blockquote wrapper component. */
-  readonly blockquote?: ComponentType<BaseProps>;
-  /** Ordered/unordered list component. */
-  readonly list?: ComponentType<ListProps>;
-  /** List item component (receives checkbox state for GFM task lists). */
-  readonly listItem?: ComponentType<ListItemProps>;
-  /** Heading component (h1–h6). */
-  readonly heading?: ComponentType<HeadingProps>;
-  /** Paragraph component. */
-  readonly paragraph?: ComponentType<BaseProps>;
-  /** Fenced/indented code block component. */
-  readonly codeBlock?: ComponentType<CodeBlockProps>;
-  /** Raw HTML block component. */
-  readonly htmlBlock?: ComponentType<HtmlProps>;
-  /** Thematic break (horizontal rule) component. */
-  readonly hr?: ComponentType<Record<never, never>>;
-  /** GFM table component. */
-  readonly table?: ComponentType<TableProps>;
-  /** Display-math block component. */
-  readonly mathBlock?: ComponentType<MathProps>;
-  /** Plain text component. */
-  readonly text?: ComponentType<{ readonly content: string }>;
-  /** Soft line break component. */
-  readonly softbreak?: ComponentType<Record<never, never>>;
-  /** Hard line break component. */
-  readonly hardbreak?: ComponentType<Record<never, never>>;
-  /** Inline code span component. */
-  readonly codeSpan?: ComponentType<CodeSpanProps>;
-  /** Emphasis (italic) component. */
-  readonly em?: ComponentType<BaseProps>;
-  /** Strong emphasis (bold) component. */
-  readonly strong?: ComponentType<BaseProps>;
-  /** Strikethrough component. */
-  readonly strikethrough?: ComponentType<BaseProps>;
-  /** Hyperlink component. */
-  readonly link?: ComponentType<LinkProps>;
-  /** Image component. */
-  readonly image?: ComponentType<ImageProps>;
-  /** Inline HTML component. */
-  readonly htmlInline?: ComponentType<HtmlProps>;
-  /** Backslash-escaped character component. */
-  readonly escape?: ComponentType<{ readonly content: string }>;
-  /** Inline math component. */
-  readonly mathInline?: ComponentType<MathProps>;
-}
+/**
+ * Token-type-keyed component override map.
+ *
+ * Each key is a `TokenTypeValue` string literal. The component receives
+ * the full token as `token` and pre-rendered children (for container tokens).
+ * Any key omitted falls back to the built-in default component.
+ */
+export type ReactComponents = {
+  readonly [K in TokenTypeValue]?: ComponentType<{
+    readonly token: TokenByType<K>;
+    readonly children?: ReactNode;
+  }>;
+};
+
+/**
+ * Maps a token type string literal to its concrete token interface.
+ *
+ * Used by `ReactComponents` to type-safely associate override components
+ * with the token they render.
+ */
+export type TokenByType<K extends TokenTypeValue> = Extract<Token, { type: K }>;
 
 /** Renderer options surfaced through `<StreamdMarkdown>` and `renderReact`. */
 export interface RenderReactOptions {
-  /** Component overrides. Unset keys use defaults. */
-  readonly components?: Components;
+  /** Token-type-keyed component overrides. Unset keys use defaults. */
+  readonly components?: ReactComponents;
   /** Task list checkbox strategy. `"disabled"` renders disabled checkboxes; `"none"` omits them. Default: `"disabled"`. */
   readonly taskListCheckboxes?: "disabled" | "none";
   /** Math rendering strategy. `"span-class"` wraps in a classed element; `"tex-delim"` emits raw TeX delimiters; `"none"` suppresses. Default: `"span-class"`. */
@@ -200,22 +154,6 @@ export interface RenderReactOptions {
   readonly classPrefix?: string;
   /** Plugins applied to the token tree before rendering. Runs in array order. */
   readonly plugins?: ReadonlyArray<Plugin>;
-  /**
-   * Authorise the default `codeBlock` component to render plugin-supplied
-   * HTML via `dangerouslySetInnerHTML`. Default: `false`.
-   *
-   * **Security** — plugins that attach `meta.html` to `CodeBlockToken`
-   * (for example, syntax-highlighter plugins) flow directly to the DOM
-   * when this flag is `true`. Leaving the flag unset / `false` keeps
-   * the renderer safe by default: the default `CodeBlock` falls back
-   * to the plain `<pre><code>` shell with text content. Flip to `true`
-   * only when every plugin in the pipeline is trusted.
-   *
-   * Custom `codeBlock` overrides may consume
-   * `props.html` directly and are not gated by this flag — the flag
-   * only governs the built-in default component.
-   */
-  readonly allowDangerousMetaHtml?: boolean;
 }
 
 /** Theme context shape. */
@@ -279,8 +217,7 @@ export type {
   CodeBlockToken,
   CodeSpanToken,
   HeadingToken,
-  HtmlBlockToken,
-  HtmlInlineToken,
+  HighlightData,
   ImageToken,
   InlineToken,
   LinkToken,
@@ -291,6 +228,9 @@ export type {
   ParagraphToken,
   TableToken,
   TextToken,
+  ThemedSegment,
   Token,
+  TokenMeta,
   TokensList,
+  TokenTypeValue,
 };

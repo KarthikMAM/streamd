@@ -7,11 +7,11 @@
  * inline tokens route through `<Text>`.
  *
  * Every default component is wrapped in `React.memo` so streaming
- * re-renders skip unchanged subtrees. Inline default components close
- * only over `theme` / `styles`, so prop-based diffs drive every change.
+ * re-renders skip unchanged subtrees.
  *
  * @module components
  */
+import type { HighlightData, ThemedSegment } from "@streamd/parser";
 import type { Theme } from "@streamd/tokens";
 import { createElement, memo, type ReactNode } from "react";
 import { Pressable, Image as RNImage, StyleSheet, Text, View } from "react-native";
@@ -21,7 +21,6 @@ import type {
   CodeSpanProps,
   Components,
   HeadingProps,
-  HtmlProps,
   ImageProps,
   LinkProps,
   ListItemProps,
@@ -33,25 +32,8 @@ import type {
 /** Default image height in density-independent pixels when no explicit size is provided. */
 const IMAGE_DEFAULT_HEIGHT = 200;
 
-/** Props passed to the list-item marker `<Text>` element. */
-interface ListMarkerTextProps {
-  /** Inline style applied to the marker text — color, font size, and fixed width. */
-  readonly style: { readonly color: string; readonly fontSize: number; readonly width: number };
-  /** Accessibility role — set to `"checkbox"` for GFM task-list items. */
-  readonly accessibilityRole?: "checkbox";
-  /** Accessibility state — reflects checked/disabled for task-list checkboxes. */
-  readonly accessibilityState?: { readonly checked: boolean; readonly disabled: boolean };
-}
-
 /**
  * Build the default component set bound to a specific theme.
- *
- * Tables and code blocks use scrollable containers on native; consumers
- * that need fine-grained scroll behaviour should override.
- *
- * The returned map defines a component for every key in {@link Components},
- * so the return type is narrowed to `Required<Components>`: consumers can
- * access any field without a null check.
  *
  * @param theme - Active theme.
  * @returns Frozen `Required<Components>` map.
@@ -72,26 +54,20 @@ export function createDefaultComponents(theme: Theme): Required<Components> {
   );
   List.displayName = "StreamdNativeList";
 
-  /** List-item component — renders bullet/number/checkbox + content.
+  /**
+   * List-item component — renders bullet/number/checkbox + content.
    *
-   *  Accessibility (H11): when the item is a GFM task-list entry
-   *  (`props.checked !== null`) the bullet `<Text>` adopts the native
-   *  checkbox role via `accessibilityRole="checkbox"` and reflects its
-   *  state through `accessibilityState={{ checked, disabled: true }}`.
-   *  Non-task items keep the plain marker text — iOS VoiceOver / Talkback
-   *  announce the character verbatim which is the correct behaviour for
-   *  a simple list bullet.
+   * Accessibility: when the item is a GFM task-list entry the bullet
+   * `<Text>` adopts `accessibilityRole="checkbox"`.
    */
   const ListItem = memo((props: ListItemProps): ReactNode => {
     const isTask = props.checked !== null;
     const bullet = resolveListItemBullet(props);
-    const markerProps: ListMarkerTextProps = isTask
-      ? {
-          style: styles.listMarker,
-          accessibilityRole: "checkbox",
-          accessibilityState: { checked: props.checked === true, disabled: true },
-        }
-      : { style: styles.listMarker };
+    const markerProps: Record<string, unknown> = { style: styles.listMarker };
+    if (isTask) {
+      markerProps["accessibilityRole"] = "checkbox";
+      markerProps["accessibilityState"] = { checked: props.checked === true, disabled: true };
+    }
     return createElement(
       View,
       { style: styles.listItem },
@@ -101,12 +77,8 @@ export function createDefaultComponents(theme: Theme): Required<Components> {
   });
   ListItem.displayName = "StreamdNativeListItem";
 
-  /** Heading component — renders themed `<Text>`; styling depends on `props.level`.
-   *
-   *  Accessibility (H11): React Native has no `aria-level` analogue, so
-   *  the component surfaces the heading depth via `accessibilityLabel`
-   *  ("heading level N") and uses `accessibilityRole="header"` to cue
-   *  VoiceOver / Talkback to announce the node as a heading.
+  /**
+   * Heading component — renders themed `<Text>` with `accessibilityRole="header"`.
    */
   const Heading = memo(
     (props: HeadingProps): ReactNode =>
@@ -130,22 +102,12 @@ export function createDefaultComponents(theme: Theme): Required<Components> {
   Paragraph.displayName = "StreamdNativeParagraph";
 
   /**
-   * Code-block component — renders `<View>` with monospaced `<Text>`
-   * content.
+   * Code-block component — renders `<View>` with monospaced `<Text>`.
    *
-   * React Native has no safe equivalent of `dangerouslySetInnerHTML`,
-   * so `props.html` is always ignored by the default component.
-   * `props.allowDangerousMetaHtml` is accepted for API parity with
-   * `@streamd/react`; custom overrides that implement their own HTML
-   * rendering (for example, via `WebView`) should honour the flag.
-   *
-   * Accessibility (H11): the wrapping `<View>` carries
-   * `accessibilityRole="text"` so screen readers announce the code as a
-   * contiguous text region rather than an unrelated grouping. When a
-   * language is set, `accessibilityLabel` is populated with
-   * `"{lang} code block"` so the reader announces what flavour of
-   * code is presented; without a language the label is omitted to avoid
-   * the "undefined code block" announcement footgun.
+   * When `props.highlight` is populated (by plugin-shiki), renders each
+   * line as a `<View>` row containing per-segment `<Text>` nodes with
+   * color, fontWeight, fontStyle, and textDecorationLine styles.
+   * Otherwise renders plain monospace text.
    */
   const CodeBlock = memo((props: CodeBlockProps): ReactNode => {
     const hasLang = props.lang.length > 0;
@@ -154,6 +116,11 @@ export function createDefaultComponents(theme: Theme): Required<Components> {
       accessibilityRole: "text",
     };
     if (hasLang) viewProps["accessibilityLabel"] = `${props.lang} code block`;
+
+    if (props.highlight) {
+      return createElement(View, viewProps, ...renderHighlightLines(props.highlight, styles));
+    }
+
     return createElement(
       View,
       viewProps,
@@ -162,23 +129,13 @@ export function createDefaultComponents(theme: Theme): Required<Components> {
   });
   CodeBlock.displayName = "StreamdNativeCodeBlock";
 
-  /** HTML-block component — renders the raw HTML string inside themed `<Text>`. */
-  const HtmlBlock = memo(
-    (props: HtmlProps): ReactNode =>
-      createElement(Text, { style: styles.htmlFallback }, props.content),
-  );
-  HtmlBlock.displayName = "StreamdNativeHtmlBlock";
-
   /** Thematic-break component — renders a thin `<View>` rule. */
   const Hr = memo((): ReactNode => createElement(View, { style: styles.hr }));
   Hr.displayName = "StreamdNativeHr";
 
-  /** Table component — renders a header row and body rows as stacked `<View>`s.
-   *
-   *  Accessibility (H11): each header cell `<View>` carries
-   *  `accessibilityRole="header"` so assistive tech announces the column
-   *  label before the associated data cells, matching the implicit
-   *  `<th scope="col">` semantics of the HTML renderer.
+  /**
+   * Table component — renders a header row and body rows as stacked `<View>`s.
+   * Header cells carry `accessibilityRole="header"`.
    */
   const Table = memo((props: TableProps): ReactNode => {
     const header = createElement(
@@ -209,7 +166,12 @@ export function createDefaultComponents(theme: Theme): Required<Components> {
   });
   Table.displayName = "StreamdNativeTable";
 
-  /** Display-math component — rendered as a pre-formatted `<View>`. */
+  /**
+   * Display-math component — renders raw TeX in monospace `<Text>`.
+   *
+   * Consumers wanting KaTeX (web via react-native-web) or MathJax
+   * (native via react-native-svg) override `components.math_block`.
+   */
   const MathBlock = memo(
     (props: MathProps): ReactNode =>
       createElement(
@@ -223,10 +185,6 @@ export function createDefaultComponents(theme: Theme): Required<Components> {
   /** Text component — emits literal text content. */
   const TextNode = memo((props: { readonly content: string }): ReactNode => props.content);
   TextNode.displayName = "StreamdNativeText";
-
-  /** Soft-break component — emits a newline character. */
-  const Softbreak = memo((): ReactNode => "\n");
-  Softbreak.displayName = "StreamdNativeSoftbreak";
 
   /** Hard-break component — emits a newline character. */
   const Hardbreak = memo((): ReactNode => "\n");
@@ -258,9 +216,8 @@ export function createDefaultComponents(theme: Theme): Required<Components> {
   );
   Strikethrough.displayName = "StreamdNativeStrikethrough";
 
-  /** Link component — renders `<Pressable>` with inline-text children; invokes `onPress(href)`. */
+  /** Link component — renders `<Pressable>` with inline-text children. */
   const Link = memo((props: LinkProps): ReactNode => {
-    /** Press handler for the surrounding Link — forwards to `props.onPress(href)` when set. */
     const handlePress = (): void => {
       if (props.onPress) props.onPress(props.href);
     };
@@ -283,18 +240,15 @@ export function createDefaultComponents(theme: Theme): Required<Components> {
   );
   Image.displayName = "StreamdNativeImage";
 
-  /** Inline-HTML component — renders the raw HTML string inside themed `<Text>`. */
-  const HtmlInline = memo(
-    (props: HtmlProps): ReactNode =>
-      createElement(Text, { style: styles.htmlFallback }, props.content),
-  );
-  HtmlInline.displayName = "StreamdNativeHtmlInline";
-
   /** Escape component — emits the escaped character as literal text. */
   const Escape = memo((props: { readonly content: string }): ReactNode => props.content);
   Escape.displayName = "StreamdNativeEscape";
 
-  /** Inline-math component — renders TeX inside monospaced `<Text>`. */
+  /**
+   * Inline-math component — renders TeX inside monospaced `<Text>`.
+   *
+   * Consumers wanting KaTeX override `components.math_inline`.
+   */
   const MathInline = memo(
     (props: MathProps): ReactNode => createElement(Text, { style: styles.codeSpan }, props.content),
   );
@@ -303,34 +257,78 @@ export function createDefaultComponents(theme: Theme): Required<Components> {
   return Object.freeze({
     blockquote: Blockquote,
     list: List,
-    listItem: ListItem,
+    list_item: ListItem,
     heading: Heading,
     paragraph: Paragraph,
-    codeBlock: CodeBlock,
-    htmlBlock: HtmlBlock,
+    code_block: CodeBlock,
     hr: Hr,
     table: Table,
-    mathBlock: MathBlock,
+    math_block: MathBlock,
     text: TextNode,
-    softbreak: Softbreak,
     hardbreak: Hardbreak,
-    codeSpan: CodeSpan,
+    code_span: CodeSpan,
     em: Em,
     strong: Strong,
     strikethrough: Strikethrough,
     link: Link,
     image: Image,
-    htmlInline: HtmlInline,
     escape: Escape,
-    mathInline: MathInline,
+    math_inline: MathInline,
   });
+}
+
+/**
+ * Renders highlight data as an array of line `<View>` elements, each
+ * containing per-segment `<Text>` nodes with themed styles.
+ *
+ * @param highlight - Structured highlight data from plugin-shiki.
+ * @param styles - Compiled stylesheet.
+ * @returns Array of React nodes, one per line.
+ */
+function renderHighlightLines(
+  highlight: HighlightData,
+  styles: ReturnType<typeof buildStyles>,
+): Array<ReactNode> {
+  const lines = new Array<ReactNode>(highlight.lines.length);
+  for (let i = 0; i < highlight.lines.length; i++) {
+    const segments = highlight.lines[i];
+    const spans = new Array<ReactNode>(segments.length);
+    for (let j = 0; j < segments.length; j++) {
+      spans[j] = createElement(
+        Text,
+        { key: j, style: segmentStyle(styles, segments[j]) },
+        segments[j].text,
+      );
+    }
+    lines[i] = createElement(View, { key: i, style: styles.highlightLine }, ...spans);
+  }
+  return lines;
+}
+
+/**
+ * Builds a style object for a single themed segment.
+ *
+ * @param styles - Compiled stylesheet for base code text.
+ * @param segment - The themed segment with optional color/bold/italic/underline.
+ * @returns Inline style object for the segment `<Text>`.
+ */
+function segmentStyle(
+  styles: ReturnType<typeof buildStyles>,
+  segment: ThemedSegment,
+): Record<string, unknown> {
+  const base: Record<string, unknown> = { ...styles.codeText };
+  if (segment.color) base["color"] = segment.color;
+  if (segment.bold) base["fontWeight"] = "700";
+  if (segment.italic) base["fontStyle"] = "italic";
+  if (segment.underline) base["textDecorationLine"] = "underline";
+  return base;
 }
 
 /**
  * Resolves the stylesheet entry for a given heading level.
  *
  * @param styles - Compiled stylesheet from {@link buildStyles}.
- * @param level - Heading depth (1–6). Values outside 1–5 fall through to h6.
+ * @param level - Heading depth (1–6).
  * @returns The style object for the resolved heading level.
  */
 function headingStyle(
@@ -353,31 +351,23 @@ function headingStyle(
   }
 }
 
-/** Unicode bullet character followed by a space — marker for unordered list items. */
+/** Unicode bullet character followed by a space. */
 const LIST_MARKER_BULLET = "\u2022 ";
-/** Unicode ballot-box-with-check followed by a space — marker for checked task-list items. */
+/** Unicode ballot-box-with-check followed by a space. */
 const LIST_MARKER_CHECKED = "\u2611 ";
-/** Unicode ballot-box followed by a space — marker for unchecked task-list items. */
+/** Unicode ballot-box followed by a space. */
 const LIST_MARKER_UNCHECKED = "\u2610 ";
 
 /**
- * Pick the marker string for a list item: number for ordered lists,
- * plain bullet for unordered, or checkbox for GFM task-list items.
+ * Pick the marker string for a list item.
  *
- * Decomposed from the original nested ternary so each branch reads as a
- * single condition — per `function-design.md §3` Condition Decomposition.
- *
- * @param props List item props — only `ordered`, `start`, `index`, `checked` are consulted.
+ * @param props List item props.
  * @returns Marker text suitable for the list-item bullet `<Text>`.
  */
 function resolveListItemBullet(props: ListItemProps): string {
-  if (props.ordered) {
-    return `${props.start + props.index}. `;
-  }
+  if (props.ordered) return `${props.start + props.index}. `;
   const isTask = props.checked !== null;
-  if (!isTask) {
-    return LIST_MARKER_BULLET;
-  }
+  if (!isTask) return LIST_MARKER_BULLET;
   return props.checked === true ? LIST_MARKER_CHECKED : LIST_MARKER_UNCHECKED;
 }
 
@@ -442,6 +432,7 @@ function buildStyles(theme: Theme) {
       fontSize: tp.fontSizeSm,
       lineHeight: tp.fontSizeSm * tp.codeLineHeight,
     },
+    highlightLine: { flexDirection: "row", flexWrap: "wrap" },
     hr: { borderBottomWidth: 1, borderBottomColor: c.border, marginVertical: sp.lg },
     table: { borderWidth: 1, borderColor: c.border, marginVertical: sp.sm },
     tableRow: { flexDirection: "row" },
@@ -473,6 +464,5 @@ function buildStyles(theme: Theme) {
     strikethrough: { textDecorationLine: "line-through", color: c.textMuted },
     link: { color: c.link, textDecorationLine: "underline" },
     image: { width: "100%", height: IMAGE_DEFAULT_HEIGHT, resizeMode: "contain" },
-    htmlFallback: { color: c.textMuted, fontFamily: tp.codeFontFamily },
   });
 }

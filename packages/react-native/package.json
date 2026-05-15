@@ -1,6 +1,6 @@
 {
   "name": "@streamd/react-native",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "React Native renderer for @streamd/parser token trees",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -15,6 +15,16 @@
       "require": {
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
+      }
+    },
+    "./streaming": {
+      "import": {
+        "types": "./dist/streaming.d.mts",
+        "default": "./dist/streaming.mjs"
+      },
+      "require": {
+        "types": "./dist/streaming.d.cts",
+        "default": "./dist/streaming.cjs"
       }
     }
   },

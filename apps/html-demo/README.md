@@ -1,7 +1,26 @@
 # @streamd/html-demo
 
-Internal — not published. Two demo surfaces for
-[`@streamd/html`](../../packages/html):
+Internal — not published. Demo surfaces for
+[`@streamd/html`](../../packages/html) showcasing the component-owned
+rendering architecture.
+
+## What this demo shows
+
+1. **Default rendering** — server-side pre-rendered HTML from the sample
+   markdown with themed stylesheets (light/dark).
+2. **Shiki via `meta.highlight`** — the `@streamd/plugin-shiki` plugin
+   annotates `CodeBlock.meta.highlight` with structured `HighlightData`;
+   the default `code_block` renderer emits styled `<span>` elements
+   directly (no raw HTML splicing).
+3. **KaTeX via component override** — math rendering is a
+   component-layer concern. The demo includes a recipe showing how
+   to override `components.math_block` / `components.math_inline`
+   with KaTeX's `renderToString`.
+4. **Custom component overrides** — a `components.code_block` override
+   that adds a language badge and reads `meta.highlight` for styled
+   spans, demonstrating the extensibility mechanism.
+
+## Surfaces
 
 - A **Node CLI** (`cli.mjs`) that parses a markdown file (or stdin) and
   prints HTML.
@@ -46,12 +65,30 @@ npm run clean --workspace=@streamd/html-demo
 
 ## How it works
 
-`build.mjs` reads the sample markdown, pre-renders it to HTML on the
-server side, and inlines both the `@streamd/parser` and `@streamd/html`
-ESM bundles into the generated page. The "Replay as stream" button in
-the browser drives `parse(accumulated, state, { gfm: true })`
-character-by-character to exercise the parser's incremental state and
-re-render on every chunk.
+`build.mjs` reads the sample markdown, initialises the Shiki plugin
+(which annotates code blocks with structured `HighlightData`), and
+pre-renders the tokens to HTML. It also renders a second copy with a
+custom `components.code_block` override to demonstrate the extensibility
+mechanism. Both the `@streamd/parser` and `@streamd/html` ESM bundles
+are inlined into the generated page for the browser-side streaming
+replay.
+
+The "Replay as stream" button drives `parse(accumulated, state, { gfm:
+true })` character-by-character to exercise the parser's incremental
+state and re-render on every chunk.
+
+## Architecture notes
+
+- **No raw-HTML splice.** The default renderer never produces raw
+  HTML from plugin output — all output is produced by typed
+  component functions.
+- **Math** is handled via `components.math_block` /
+  `components.math_inline` overrides that call KaTeX directly
+  against `token.content`.
+- **`@streamd/plugin-shiki`** annotates `CodeBlock.meta.highlight` with
+  `HighlightData` (structured `ThemedSegment[][]`). The renderer's
+  default `code_block` component reads this and emits styled `<span>`
+  elements.
 
 ## Requirements
 

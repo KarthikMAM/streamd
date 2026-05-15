@@ -1,6 +1,6 @@
 {
   "name": "@streamd/react",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "React renderer for @streamd/parser token trees",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -15,6 +15,16 @@
       "require": {
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
+      }
+    },
+    "./streaming": {
+      "import": {
+        "types": "./dist/streaming/index.d.mts",
+        "default": "./dist/streaming/index.mjs"
+      },
+      "require": {
+        "types": "./dist/streaming/index.d.cts",
+        "default": "./dist/streaming/index.cjs"
       }
     }
   },
@@ -54,7 +64,8 @@
     "markdown",
     "react",
     "renderer",
-    "streamd"
+    "streamd",
+    "streaming"
   ],
   "license": "MIT",
   "repository": {

@@ -5,13 +5,11 @@
  * token, `null` to drop the token, or `undefined` to keep it unchanged.
  *
  * `applyPlugins` — runs a plugin list in order, threading the meta bag through.
- * Before running, enforces three ABI guardrails:
+ * Before running, enforces two ABI guardrails:
  *   1. Every plugin must declare `requires.tokenSchema` matching the parser's
  *      `TOKEN_SCHEMA_VERSION` (throws `"missing-requires"` /
  *      `"token-schema-mismatch"`).
- *   2. The `sanitize` plugin (matched by `plugin.name === "sanitize"`) must
- *      be the last entry (throws `"sanitize-not-last"`).
- *   3. If a plugin's `transform` throws, the error is rewrapped as a
+ *   2. If a plugin's `transform` throws, the error is rewrapped as a
  *      `StreamdPluginAbiError` with `kind: "transform-failed"`, the plugin
  *      name, and the original error as `cause` (throws `"transform-failed"`).
  *
@@ -48,9 +46,6 @@ import {
 import { StreamdPluginAbiError } from "./errors";
 import { pluginsErrorMessage } from "./messages";
 import type { ApplyPluginsOptions, ApplyPluginsResult, Plugin, PluginContext } from "./types";
-
-/** Name of the sanitize plugin — referenced for the sanitize-last check. */
-const SANITIZE_PLUGIN_NAME = "sanitize";
 
 /** Public caller name attached to every thrown error for diagnostic text. */
 const APPLY_PLUGINS_CALLER = "applyPlugins";
@@ -325,7 +320,6 @@ export function applyPlugins(
   options: ApplyPluginsOptions = {},
 ): ApplyPluginsResult {
   assertPluginAbiCompatibility(plugins);
-  assertSanitizeIsLast(plugins);
 
   const meta = options.meta ? { ...options.meta } : {};
   const ctx: PluginContext = {
@@ -382,36 +376,6 @@ function assertPluginAbiCompatibility(plugins: ReadonlyArray<Plugin>): void {
         requires.tokenSchema,
         TOKEN_SCHEMA_VERSION,
       ),
-    });
-  }
-}
-
-/**
- * Verify that the `sanitize` plugin (matched by `plugin.name === "sanitize"`)
- * is the last entry in the pipeline when present.
- *
- * This is the H1-A guardrail: a plugin after `sanitize()` can reintroduce
- * raw HTML tokens, unsafe link targets, or dangerous `meta.attrs` that
- * `sanitize` just scrubbed. Enforcing sanitize-last at load time catches
- * misordered pipelines before any output escapes.
- *
- * @param plugins Pipeline to validate.
- * @throws {StreamdPluginAbiError} With kind `"sanitize-not-last"` when a
- *   plugin named `"sanitize"` appears at any index other than `length - 1`.
- */
-function assertSanitizeIsLast(plugins: ReadonlyArray<Plugin>): void {
-  const last = plugins.length - 1;
-
-  for (let i = 0; i < plugins.length; i++) {
-    const plugin = plugins[i];
-    if (plugin.name !== SANITIZE_PLUGIN_NAME) continue;
-    if (i === last) continue;
-
-    throw new StreamdPluginAbiError({
-      kind: "sanitize-not-last",
-      caller: APPLY_PLUGINS_CALLER,
-      pluginName: plugin.name,
-      message: pluginsErrorMessage.sanitizeNotLast(i, plugins.length),
     });
   }
 }

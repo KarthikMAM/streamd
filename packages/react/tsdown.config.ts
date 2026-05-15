@@ -1,2 +1,8 @@
 /** tsdown build config for @streamd/react. */
-export { default } from "@streamd/config/tsdown";
+import { baseConfig } from "@streamd/config/tsdown";
+import { defineConfig } from "tsdown";
+
+export default defineConfig({
+  ...baseConfig,
+  entry: ["src/index.ts", "src/streaming/index.ts"],
+});

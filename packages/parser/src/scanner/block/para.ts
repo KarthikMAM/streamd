@@ -19,7 +19,6 @@ import {
   CC_EQ,
   CC_GT,
   CC_HASH,
-  CC_LT,
   CC_PIPE,
   CC_PLUS,
   CC_RPAREN,
@@ -28,7 +27,6 @@ import {
   CC_TILDE,
   CC_UNDERSCORE,
 } from "../constants";
-import { matchHtmlBlockOpen } from "./html";
 import { tryTableSeparator } from "./table-separator";
 import { type Block, BlockKind, createBlock } from "./types";
 import { countIndent, findLineEndFast, isBlankRange, isSpaceOrTab, nextLine } from "./utils";
@@ -274,11 +272,6 @@ function isNewBlockStart(
       src.charCodeAt(p + 1) === CC_SPACE
     )
       return true;
-  }
-
-  // HTML block
-  if (ch === CC_LT) {
-    if (matchHtmlBlockOpen(src, fns, lineEnd, true) > 0) return true;
   }
 
   return false;

@@ -65,11 +65,12 @@ export function LiveResponse() {
 ## Component overrides
 
 Every token kind has a matching component you can replace — same shape
-as [`@streamd/react`](../react) but mapped to React Native primitives:
+as [`@streamd/react`](../react) but mapped to React Native primitives.
+Keys match the token's `.type` discriminant (snake_case):
 
 ```tsx
 const components = {
-  codeBlock: ({ content, lang }) => (
+  code_block: ({ content, lang }) => (
     <View style={styles.code}>
       <Text style={{ color: pickLangColor(lang) }}>{content}</Text>
     </View>
@@ -79,7 +80,7 @@ const components = {
 <StreamdMarkdownNative source={md} components={components} />;
 ```
 
-## Plugins + `allowDangerousMetaHtml`
+## Plugins
 
 The same plugin pipeline from [`@streamd/plugins`](../plugins) works
 here:
@@ -93,24 +94,19 @@ import { sanitize, linkAttributes } from "@streamd/plugins";
 />;
 ```
 
-React Native has no `dangerouslySetInnerHTML` equivalent, so the
-default components always ignore `token.meta.html`. The
-`allowDangerousMetaHtml` prop is forwarded to custom `codeBlock` /
-`mathBlock` overrides (for example, a `WebView`-backed component) so
-those authors can opt in when every plugin in the pipeline is
-trusted:
+Plugins annotate tokens via `meta` (structured data only — no raw
+HTML). The default `code_block` component reads `meta.highlight`
+(populated by `plugin-shiki`) and renders styled `<Text>` spans.
+Override `math_block` / `math_inline` with a KaTeX or MathJax
+component to render TeX:
 
 ```tsx
 <StreamdMarkdownNative
   source={markdown}
-  plugins={[shikiPlugin, sanitize({ allowRawHtml: true })]}
-  components={{ codeBlock: WebViewCodeBlock }}
-  allowDangerousMetaHtml
+  plugins={[shikiPlugin]}
+  components={{ code_block: HighlightedCodeBlock, math_block: KaTeXBlock }}
 />
 ```
-
-See the [security model in the root README](../../README.md#security-model)
-for the monorepo-wide contract.
 
 ## Direct render function
 

@@ -14,6 +14,8 @@
   "dependencies": {
     "@streamd/html": "*",
     "@streamd/parser": "*",
+    "@streamd/plugin-shiki": "*",
+    "@streamd/plugins": "*",
     "@streamd/tokens": "*"
   },
   "engines": {

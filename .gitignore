@@ -16,3 +16,6 @@ review-streamd-*.md
 
 # Machine-local IDE settings (Kiro LSP config is workstation-specific)
 .kiro/settings/
+
+# Docker-backed build cache (see scripts/docker.sh)
+.cache/

@@ -92,6 +92,8 @@ textarea {
 .controls {
   display: flex;
   gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .stream-output .streamd-root {
@@ -108,4 +110,47 @@ button {
   background: var(--streamd-color-code-background);
   color: var(--streamd-color-text);
   cursor: pointer;
+}
+
+.preset-selector {
+  display: flex;
+  gap: 4px;
+  margin-left: 12px;
+}
+
+.preset-selector button {
+  padding: 4px 10px;
+  font-size: 0.85rem;
+}
+
+.preset-selector button.active {
+  background: var(--streamd-color-link);
+  color: #fff;
+  border-color: var(--streamd-color-link);
+}
+
+/* Custom code block with line numbers */
+.custom-code-block {
+  padding: 12px;
+  border-radius: var(--streamd-radius-md);
+  background: var(--streamd-color-code-background);
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.custom-code-block .code-line {
+  display: block;
+}
+
+/* Math blocks */
+.math-block {
+  margin: 1em 0;
+  text-align: center;
+  overflow-x: auto;
+}
+
+.math-inline {
+  display: inline;
 }

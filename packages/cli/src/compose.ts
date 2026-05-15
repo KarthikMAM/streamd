@@ -37,11 +37,9 @@ export function buildParseOptions(options: CliOptions): ParseOptions {
 /**
  * Build the plugin pipeline for the render stage.
  *
- * Order is significant — `sanitize()` must be last per the plugin ABI,
- * and that is enforced by `applyPlugins` at load time. `sanitize` gets
- * `allowRawHtml` set when `--allow-dangerous-meta-html` is on so
- * plugin-emitted `meta.html` (e.g. Shiki output) survives into the
- * renderer.
+ * Order is significant — plugins are applied in array order.
+ * `headingAnchors` and `linkAttributes` annotate tokens; `sanitize`
+ * rewrites unsafe URLs and filters `meta.attrs`.
  *
  * @param options Validated CLI options.
  * @returns A plugin array suitable for `renderHtml({ plugins })`.
@@ -50,15 +48,15 @@ export function buildPlugins(options: CliOptions): Array<Plugin> {
   const plugins: Array<Plugin> = [];
   if (options.anchors) plugins.push(headingAnchors());
   if (options.linkAttrs) plugins.push(linkAttributes());
-  if (options.sanitize) plugins.push(sanitize({ allowRawHtml: options.allowDangerousMetaHtml }));
+  if (options.sanitize) plugins.push(sanitize());
   return plugins;
 }
 
 /**
  * Build the combined parse + render options passed to `streamHtml`.
  *
- * `classPrefix`, `wrapRoot`, `xhtml`, `allowDangerousMetaHtml` flow
- * into the renderer; `gfm` / `math` flow into the parser.
+ * `classPrefix`, `wrapRoot`, `xhtml` flow into the renderer; `gfm` /
+ * `math` flow into the parser.
  *
  * @param options Validated CLI options.
  * @returns StreamHtmlOptions forwarded to `@streamd/html`.
@@ -68,7 +66,6 @@ export function buildStreamOptions(options: CliOptions): StreamHtmlOptions {
     parse: buildParseOptions(options),
     plugins: buildPlugins(options),
     xhtml: options.xhtml,
-    allowDangerousMetaHtml: options.allowDangerousMetaHtml,
     wrapRoot: options.wrapRoot,
   };
 
