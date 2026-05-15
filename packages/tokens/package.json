@@ -1,6 +1,6 @@
 {
   "name": "@streamd/tokens",
-  "version": "0.0.1",
+  "version": "0.2.0",
   "description": "Design tokens and themes for streamd renderers",
   "type": "module",
   "main": "./dist/index.cjs",

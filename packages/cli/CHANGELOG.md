@@ -1,5 +1,25 @@
 # @streamd/cli
 
+## 0.2.0
+
+### Minor Changes
+
+- d259513: The `--allow-dangerous-meta-html` flag is no longer part of the CLI.
+  Math rendering and syntax highlighting are component overrides in the
+  library API; the CLI emits default HTML only.
+
+### Patch Changes
+
+- Updated dependencies [d259513]
+- Updated dependencies [d259513]
+- Updated dependencies [d259513]
+- Updated dependencies [d259513]
+- Updated dependencies [d259513]
+  - @streamd/html@0.2.0
+  - @streamd/parser@0.2.0
+  - @streamd/plugins@0.2.0
+  - @streamd/tokens@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes

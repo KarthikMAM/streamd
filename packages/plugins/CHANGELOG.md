@@ -1,5 +1,28 @@
 # @streamd/plugins
 
+## 0.2.0
+
+### Minor Changes
+
+- d259513: `@streamd/plugin-katex` is no longer part of the monorepo. Math
+  rendering is a component-layer concern — the parser emits
+  `MathBlock` / `MathInline` tokens with raw TeX as `content`, and
+  consumers supply a `components.math_block` /
+  `components.math_inline` override that calls KaTeX directly. See
+  the math recipe in the docs site for the pattern.
+- d259513: Plugins transform `Token[] → Token[]`. The `meta.html` channel is
+  gone: `sanitize()` is URL-scheme + safe-attrs only; `highlightCode()`
+  annotates `meta.highlight` with structured `HighlightData`.
+  `sanitize-not-last` ABI error kind removed. All built-ins require
+  `tokenSchema: 2`.
+
+### Patch Changes
+
+- Updated dependencies [d259513]
+- Updated dependencies [d259513]
+  - @streamd/parser@0.2.0
+  - @streamd/tokens@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes
