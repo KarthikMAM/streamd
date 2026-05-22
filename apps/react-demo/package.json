@@ -13,7 +13,7 @@
   "dependencies": {
     "@streamd/react": "*",
     "@streamd/tokens": "*",
-    "katex": "^0.16.22",
+    "katex": "^0.16.47",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
