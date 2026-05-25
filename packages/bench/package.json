@@ -21,7 +21,7 @@
     "@streamd/parser": "*",
     "@streamd/plugins": "*",
     "@streamd/react": "*",
-    "@types/react": "^19.0.0",
+    "@types/react": "^19.2.15",
     "@types/react-dom": "^19.0.0",
     "commonmark": "~0.31.2",
     "markdown-it": "^14.1.1",

@@ -52,7 +52,7 @@
   },
   "devDependencies": {
     "@streamd/config": "*",
-    "@types/react": "^19.0.0",
+    "@types/react": "^19.2.15",
     "happy-dom": "^20.0.0",
     "react": "19.2.6",
     "react-native": "0.85.3",
