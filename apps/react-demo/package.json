@@ -14,12 +14,12 @@
     "@streamd/react": "*",
     "@streamd/tokens": "*",
     "katex": "^0.16.47",
-    "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
   },
   "devDependencies": {
     "@types/katex": "^0.16.7",
-    "@types/react": "^19.0.0",
+    "@types/react": "^19.2.16",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
     "typescript": "^5.9.0",
