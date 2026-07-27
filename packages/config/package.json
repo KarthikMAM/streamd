@@ -16,10 +16,10 @@
   ],
   "peerDependencies": {
     "tsdown": "~0.22.0",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.7"
   },
   "devDependencies": {
     "tsdown": "~0.22.0",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.7"
   }
 }
